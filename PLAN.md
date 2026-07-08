@@ -31,7 +31,7 @@ Secret Manager, Identity Platform enabled; hello-world server deployed.
   under MC1). Budget alert config verified via CLI; the alert *email* only
   fires when spend crosses a threshold — can't be simulated, watch for it.
 
-## MC1 — Cloud rubrics                    Status: CLOUD DONE 2026-07-08 (iOS pending)
+## MC1 — Cloud rubrics                                 Status: DONE 2026-07-08
 Rubrics in Firestore with versioning; public read API; director-editable later
 (MC4). iOS fetches on launch, caches, falls back to bundled copy offline.
 - CLOUD: [x] `GET /v1/rubrics` + `GET /v1/rubrics/:id` — live on dev,
@@ -40,9 +40,10 @@ Rubrics in Firestore with versioning; public read API; director-editable later
 - CLOUD: [x] seed from `medadvisor/rubrics/*.json` via
       `node infra/seed-rubrics.mjs dev|prod` (idempotent; re-run to re-seed)
 - CLOUD: [x] prod: seeded + deployed, endpoints verified (2 rubrics, 404 path)
-- iOS:   [ ] fetch on launch → cache → bundled fallback (airplane-mode safe)
-- **Accept:** edit a criterion in Firestore → phone shows it without an app
-  update; airplane mode still fully works.
+- iOS:   [x] fetch on launch → cache → bundled fallback (airplane-mode safe)
+- **Accept:** ✅ passed 2026-07-08 — edited the outpatient-clinic "opening"
+  dimension label in dev Firestore; Bilal's phone showed "Opening (TEST)"
+  without an app update (edit then reverted by re-running the seeder).
 - **Interface (SETTLED 2026-07-08 — iOS chat can build against this):**
   base URL dev:  `https://medadvisor-api-743594385075.us-west1.run.app`
   base URL prod: `https://medadvisor-api-597896295002.us-west1.run.app`
