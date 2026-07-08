@@ -160,15 +160,43 @@ amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
     `inviteCodes/{code}` `{orgId, role, active, maxUses, uses, createdAt,
     expiresAt}`
 
-## MC3 — Sync with the review gate (iOS lane)          Status: NOT STARTED
+## MC3 — Sync with the review gate (iOS lane)          Status: IN PROGRESS
 Tier-2 sharing: scores + redacted evidence quotes, nothing else.
-- [ ] Second-pass rule-based NER redaction (NLTagger + regex) over quotes
-- [ ] "Share with mentor" review screen: trainee sees EXACT payload, edits/
-      removes quotes, confirms → upload (org-scoped)
-- [ ] Cross-device restore of own history when logged in
+- iOS:   [ ] Second-pass rule-based NER redaction (NLTagger + regex) over quotes
+- iOS:   [ ] "Share with mentor" review screen: trainee sees EXACT payload,
+      edits/removes quotes, confirms → upload (org-scoped)
+- iOS:   [ ] Cross-device restore of own history when logged in
+- CLOUD: [ ] `POST /v1/sessions` + reads (below) — needed by both MC3 and MC4;
+      build server-side alongside MC4.
 - **Accept:** shared session appears on dashboard in seconds; a planted patient
   name is caught by NER or visibly removable at the gate; second device
   restores history; nothing uploads without explicit confirm.
+- **Interface (PROPOSED by iOS chat 2026-07-09 — cloud chat: confirm/adjust
+  here before building, then flip to SETTLED):**
+  - `POST /v1/sessions` (Bearer; caller must have org claims) body:
+    ```json
+    {
+      "clientSessionId": "<uuid — idempotency key; re-POST must not duplicate>",
+      "recordedAt": "2026-07-09T18:20:00Z",
+      "location": "Outpatient Clinic",
+      "rubricId": "outpatient-clinic",
+      "rubricVersion": "0.1.0-draft",
+      "summary": "<redacted, user-reviewed>",
+      "criteria": [
+        { "id": "op-1", "dimension": "opening",
+          "result": "met|partial|missed|na",
+          "evidence": "<redacted quote or null>",
+          "tip": "<string or null>" }
+      ]
+    }
+    ```
+    → 200 `{ "sessionId" }`. Server stamps `uid`/`orgId` from claims plus
+    `receivedAt`; REJECTS unknown top-level keys (there is deliberately no
+    transcript field); idempotent upsert on (uid, clientSessionId).
+  - `GET /v1/me/sessions` → caller's own shared sessions (cross-device
+    restore): `{ "sessions": [ <same shape + sessionId + receivedAt> ] }`
+  - `GET /v1/orgs/:orgId/sessions?uid=<uid>` (admin of that org) → same
+    list shape, for the MC4 drill-in.
 
 ## MC4 — Mentor dashboard v1 (cloud lane)              Status: NOT STARTED
 - [ ] Cohort view: trainees, session counts, per-dimension trend lines
