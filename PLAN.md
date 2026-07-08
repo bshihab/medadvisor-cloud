@@ -83,14 +83,68 @@ Rubrics in Firestore with versioning; public read API; director-editable later
     the pristine rubric document (nothing else) — the MC4 editor and the
     console both edit it 1:1.
 
-## MC2 — Accounts & orgs                               Status: NOT STARTED
-Identity Platform (email + Sign in with Apple), tenants = orgs, invite codes.
-- CLOUD: [ ] Identity Platform config, org/tenant model, invite-code issue/redeem
-- CLOUD: [ ] Firestore security rules: all data org-scoped, deny-by-default
+## MC2 — Accounts & orgs                               Status: IN PROGRESS
+Identity Platform (email + Sign in with Apple), project-level accounts (see
+amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
+- CLOUD: [ ] Identity Platform config, org model, invite-code issue/redeem
+- CLOUD: [ ] Firestore security rules: deny-by-default (all access is
+      server-mediated; org scoping enforced in the API)
 - iOS:   [ ] optional login UI; "Join my program" invite-code flow
 - DASH:  [ ] admin login page (minimal)
 - **Accept:** create org → trainee joins via code on phone → director logs into
   web and sees roster (no session data yet).
+- **Interface (SETTLED 2026-07-08 — iOS chat can build against this):**
+
+  **How the app signs in** — FirebaseAuth iOS SDK, straight to Identity
+  Platform (our API is not involved in sign-in). Project-level accounts:
+  NEVER set `auth.tenantID`. Providers enabled: email/password and
+  Sign in with Apple (native `ASAuthorizationController` flow → wrap the
+  Apple identity token + raw nonce in an `OAuthProvider` "apple.com"
+  credential → `signIn(with:)`).
+
+  Dev client config (public client identifiers, not secrets — they ship in
+  the app bundle; prod values pending prod approval, same shape):
+  - PROJECT_ID: `medadvisor-dev`
+  - API_KEY: `AIzaSyBvHos84simxPRf4z8ICERrVz6zhYkayaE`
+  - GOOGLE_APP_ID: `1:743594385075:ios:9bb2092806b7e835149ac6`
+  - BUNDLE_ID registered: `app.medadvisor.MedAdvisor` (Apple provider
+    clientId matches; full GoogleService-Info.plist on request)
+  - Apple-portal prerequisite (Bilal, in Xcode on the Air): add the
+    "Sign in with Apple" capability to the App ID `app.medadvisor.MedAdvisor`.
+
+  **Login screen (per Apple HIG / App Review):**
+  - Use the system `ASAuthorizationAppleIDButton` — never a hand-drawn
+    Apple button; at least as prominent as the email option (Review 4.8).
+  - Login stays OPTIONAL: the screen must be skippable ("Not now"), never
+    gate core app function, and appear in context (enable sync/share), not
+    at first launch (HIG: delay sign-in as long as possible).
+  - Support light/dark button variants and Dynamic Type.
+
+  **API contract** (authed calls send `Authorization: Bearer <Firebase ID
+  token>`; errors are `{"error": "<code>"}` — 401 `unauthenticated`,
+  403 `forbidden`, 404 `invalid_code`/`not_found`):
+  - `POST /v1/invites/redeem` body `{"code":"ABCD2345"}` →
+    200 `{ "orgId", "orgName", "role", "alreadyMember": false }`.
+    Codes are 8 chars from A–Z/2–9 minus lookalikes (I,O,0,1); client
+    should uppercase input. Invalid/expired/exhausted → 404 `invalid_code`
+    (deliberately indistinguishable).
+    After a successful redeem the client MUST force-refresh the ID token
+    (`getIDTokenForcingRefresh(true)`) to pick up new custom claims.
+  - `GET /v1/me` → 200 `{ "uid", "email", "displayName",
+    "org": { "orgId", "name", "role" } | null }` — org comes from the
+    token's custom claims `{ orgId, role }` (one org per user for now).
+  - `GET /v1/orgs/:orgId/members` (admin of that org only) →
+    200 `{ "members": [ { "uid", "email", "displayName", "role",
+    "joinedAt" } ], "count" }`
+  - `POST /v1/orgs/:orgId/invites` (admin only) body
+    `{ "role": "trainee", "maxUses": 50, "expiresDays": 30 }` (all
+    optional, those are defaults) → 200 `{ "code", "orgId", "role",
+    "maxUses", "expiresAt" }`
+  - Firestore (server-only; client rules deny-by-default):
+    `orgs/{orgId}` `{name, createdAt}` ·
+    `orgs/{orgId}/members/{uid}` `{role, email, displayName, joinedAt}` ·
+    `inviteCodes/{code}` `{orgId, role, active, maxUses, uses, createdAt,
+    expiresAt}`
 
 ## MC3 — Sync with the review gate (iOS lane)          Status: NOT STARTED
 Tier-2 sharing: scores + redacted evidence quotes, nothing else.
@@ -140,3 +194,9 @@ Tier-2 sharing: scores + redacted evidence quotes, nothing else.
 - 2026-07-08 **Dedicated gcloud config `medadvisor`** on the mini (the machine
   also serves bithunch/offloadai). Selected per-command via
   `CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor`, never activated globally.
+- 2026-07-08 **AMENDS "tenants = orgs": project-level accounts.** IdP accounts
+  can never move into a tenant after creation, which breaks "login optional,
+  join program later via code". So: one project-level auth realm; org
+  membership/roles live in Firestore, granted by invite-code redeem (works
+  before or after sign-up). IdP tenants reserved for institution SSO (MC5+).
+  Still Identity Platform (BAA-eligible) — only the tenant feature is unused.
