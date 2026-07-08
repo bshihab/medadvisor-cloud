@@ -83,7 +83,7 @@ Rubrics in Firestore with versioning; public read API; director-editable later
     the pristine rubric document (nothing else) — the MC4 editor and the
     console both edit it 1:1.
 
-## MC2 — Accounts & orgs        Status: CLOUD+DASH DONE 2026-07-08 (iOS pending)
+## MC2 — Accounts & orgs                               Status: DONE 2026-07-08
 Identity Platform (email + Sign in with Apple), project-level accounts (see
 amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
 - CLOUD: [x] Identity Platform config, org model, invite-code issue/redeem —
@@ -94,7 +94,7 @@ amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
       (`node infra/bootstrap-org.mjs prod <orgId> "<name>" <directorEmail>`).
 - CLOUD: [x] Firestore security rules: deny-by-default deployed to dev AND
       prod (`infra/firestore.rules` via `node infra/deploy-rules.mjs dev|prod`)
-- iOS:   [ ] optional login UI; "Join my program" invite-code flow
+- iOS:   [x] optional login UI; "Join my program" invite-code flow
 - DASH:  [x] admin login page (minimal) — `<base-url>/admin` (email+password
       → roster table; real dashboard is MC4)
 - **Dev test fixtures (for iOS-lane testing):** org `org-directors-program`
@@ -102,8 +102,8 @@ amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
   2026-08-07); test accounts `director.test@medadvisor.app` (admin) and
   `trainee.test@medadvisor.app` — dev only, throwaway.
   Bootstrap/reseed: `node infra/bootstrap-org.mjs dev <orgId> "<name>" <email>`.
-- **Accept:** create org → trainee joins via code on phone → director logs into
-  web and sees roster (no session data yet).
+- **Accept:** ✅ passed 2026-07-08 on device — trainee joined via code on the
+  phone; director saw the roster at /admin.
 - **Interface (SETTLED 2026-07-08 — iOS chat can build against this):**
 
   **How the app signs in** — FirebaseAuth iOS SDK, straight to Identity
@@ -171,9 +171,10 @@ Tier-2 sharing: scores + redacted evidence quotes, nothing else.
 - **Accept:** shared session appears on dashboard in seconds; a planted patient
   name is caught by NER or visibly removable at the gate; second device
   restores history; nothing uploads without explicit confirm.
-- **Interface (PROPOSED by iOS chat 2026-07-09 — cloud chat: confirm/adjust
-  here before building, then flip to SETTLED):**
-  - `POST /v1/sessions` (Bearer; caller must have org claims) body:
+- **Interface (SETTLED 2026-07-08 — confirmed by cloud chat; ▸ marks
+  adjustments to the iOS proposal):**
+  - `POST /v1/sessions` (Bearer; caller must have org claims, else 403
+    `forbidden`) body:
     ```json
     {
       "clientSessionId": "<uuid — idempotency key; re-POST must not duplicate>",
@@ -183,20 +184,39 @@ Tier-2 sharing: scores + redacted evidence quotes, nothing else.
       "rubricVersion": "0.1.0-draft",
       "summary": "<redacted, user-reviewed>",
       "criteria": [
-        { "id": "op-1", "dimension": "opening",
+        { "id": "intro_self", "dimension": "opening",
           "result": "met|partial|missed|na",
           "evidence": "<redacted quote or null>",
           "tip": "<string or null>" }
       ]
     }
     ```
-    → 200 `{ "sessionId" }`. Server stamps `uid`/`orgId` from claims plus
-    `receivedAt`; REJECTS unknown top-level keys (there is deliberately no
-    transcript field); idempotent upsert on (uid, clientSessionId).
-  - `GET /v1/me/sessions` → caller's own shared sessions (cross-device
-    restore): `{ "sessions": [ <same shape + sessionId + receivedAt> ] }`
-  - `GET /v1/orgs/:orgId/sessions?uid=<uid>` (admin of that org) → same
-    list shape, for the MC4 drill-in.
+    → 200 `{ "sessionId" }` ▸ stable, derived from `(uid, clientSessionId)`.
+    Server stamps `uid`/`orgId` from claims plus `receivedAt`; REJECTS
+    unknown keys ▸ both top-level AND inside criteria items (there is
+    deliberately no transcript field anywhere).
+    ▸ Re-POST with the same `clientSessionId` REPLACES the stored session
+    (last confirmed payload wins) — never duplicates.
+    ▸ Validation (violations → 400 `{"error":"invalid_body","detail":…}`):
+    `result` ∈ met|partial|missed|na · 1–64 criteria · `summary` ≤ 2000
+    chars · `evidence`/`tip` ≤ 500 chars each · `recordedAt` ISO-8601 ·
+    `clientSessionId` matches `[A-Za-z0-9_-]{1,128}`.
+    ▸ Server records `rubricId`/`rubricVersion` as sent and does NOT
+    cross-validate criterion ids against the rubric store (tolerates
+    version skew between phone cache and cloud rubric by design).
+  - `GET /v1/me/sessions` → caller's own shared sessions, newest first
+    (`recordedAt` desc): `{ "sessions": [ <body shape + "sessionId" +
+    "receivedAt" + "uid"> ], "count" }`.
+    ▸ `?limit=` optional (default 100, max 500). ▸ Caller with no org
+    claims gets `{"sessions":[],"count":0}` (nothing can have been shared).
+  - `GET /v1/orgs/:orgId/sessions` (admin of that org) → same list shape.
+    ▸ `uid` query param is OPTIONAL: omit → all org sessions (feeds the
+    MC4 cohort view/trends), set → one trainee (drill-in). `?limit=` as
+    above. Join uid → name/email via `GET /v1/orgs/:orgId/members`.
+  - ▸ Firestore: `orgs/{orgId}/sessions/{uid}__{clientSessionId}` with
+    `{uid, orgId, clientSessionId, recordedAt, receivedAt, location,
+    rubricId, rubricVersion, summary, criteria}` (server-only access,
+    same deny-all rules).
 
 ## MC4 — Mentor dashboard v1 (cloud lane)              Status: NOT STARTED
 - [ ] Cohort view: trainees, session counts, per-dimension trend lines
