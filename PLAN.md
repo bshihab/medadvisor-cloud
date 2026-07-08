@@ -83,14 +83,17 @@ Rubrics in Firestore with versioning; public read API; director-editable later
     the pristine rubric document (nothing else) — the MC4 editor and the
     console both edit it 1:1.
 
-## MC2 — Accounts & orgs                               Status: IN PROGRESS
+## MC2 — Accounts & orgs        Status: CLOUD+DASH DONE 2026-07-08 (iOS pending)
 Identity Platform (email + Sign in with Apple), project-level accounts (see
 amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
 - CLOUD: [x] Identity Platform config, org model, invite-code issue/redeem —
       LIVE ON DEV, all paths verified (signup→redeem→claims→roster, 401/403/
-      404, idempotent redeem, lowercase normalization). PROD pending approval.
-- CLOUD: [x] Firestore security rules: deny-by-default deployed to dev
-      (`infra/firestore.rules` via `node infra/deploy-rules.mjs dev|prod`)
+      404, idempotent redeem, lowercase normalization). Prod: same build
+      deployed + smoke-tested (auth gate, /admin, client-config, rubrics);
+      real org NOT bootstrapped — deliberate, waits for cohort onboarding
+      (`node infra/bootstrap-org.mjs prod <orgId> "<name>" <directorEmail>`).
+- CLOUD: [x] Firestore security rules: deny-by-default deployed to dev AND
+      prod (`infra/firestore.rules` via `node infra/deploy-rules.mjs dev|prod`)
 - iOS:   [ ] optional login UI; "Join my program" invite-code flow
 - DASH:  [x] admin login page (minimal) — `<base-url>/admin` (email+password
       → roster table; real dashboard is MC4)
@@ -110,13 +113,16 @@ amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
   Apple identity token + raw nonce in an `OAuthProvider` "apple.com"
   credential → `signIn(with:)`).
 
-  Dev client config (public client identifiers, not secrets — they ship in
-  the app bundle; prod values pending prod approval, same shape):
-  - PROJECT_ID: `medadvisor-dev`
-  - API_KEY: `AIzaSyBvHos84simxPRf4z8ICERrVz6zhYkayaE`
-  - GOOGLE_APP_ID: `1:743594385075:ios:9bb2092806b7e835149ac6`
-  - BUNDLE_ID registered: `app.medadvisor.MedAdvisor` (Apple provider
-    clientId matches; full GoogleService-Info.plist on request)
+  Client config (public client identifiers, not secrets — they ship in
+  the app bundle):
+  - dev:  PROJECT_ID `medadvisor-dev` ·
+    API_KEY `AIzaSyBvHos84simxPRf4z8ICERrVz6zhYkayaE` ·
+    GOOGLE_APP_ID `1:743594385075:ios:9bb2092806b7e835149ac6`
+  - prod: PROJECT_ID `medadvisor-production` ·
+    API_KEY `AIzaSyCtAMi8JOzeJWsSaP5yV4WU9FPDsI5ye00` ·
+    GOOGLE_APP_ID `1:597896295002:ios:7db9c01f79a5bc79471e63`
+  - BUNDLE_ID registered on both: `app.medadvisor.MedAdvisor` (Apple
+    provider clientId matches; full GoogleService-Info.plist on request)
   - Apple-portal prerequisite (Bilal, in Xcode on the Air): add the
     "Sign in with Apple" capability to the App ID `app.medadvisor.MedAdvisor`.
 

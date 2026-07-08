@@ -21,7 +21,7 @@ case "$ENV" in
     ;;
   prod)
     PROJECT="medadvisor-production"  # 'medadvisor-prod' ID was taken globally
-    FIREBASE_API_KEY="${PROD_FIREBASE_API_KEY:-}"  # set after prod IdP init
+    FIREBASE_API_KEY="AIzaSyCtAMi8JOzeJWsSaP5yV4WU9FPDsI5ye00"
     ;;
   *) echo "usage: $(basename "$0") dev|prod" >&2; exit 1 ;;
 esac
