@@ -31,18 +31,56 @@ Secret Manager, Identity Platform enabled; hello-world server deployed.
   under MC1). Budget alert config verified via CLI; the alert *email* only
   fires when spend crosses a threshold — can't be simulated, watch for it.
 
-## MC1 — Cloud rubrics                                 Status: NOT STARTED
+## MC1 — Cloud rubrics                                 Status: IN PROGRESS
 Rubrics in Firestore with versioning; public read API; director-editable later
 (MC4). iOS fetches on launch, caches, falls back to bundled copy offline.
-- CLOUD: [ ] `GET /v1/rubrics` + `GET /v1/rubrics/:id` (versioned payload)
-- CLOUD: [ ] seed from `medadvisor/rubrics/*.json`
+- CLOUD: [x] `GET /v1/rubrics` + `GET /v1/rubrics/:id` — live on dev,
+      verified (envelope per spec below, 404/500 paths, Cache-Control,
+      Firestore round-trip byte-identical to source JSONs)
+- CLOUD: [x] seed from `medadvisor/rubrics/*.json` via
+      `node infra/seed-rubrics.mjs dev|prod` (idempotent; re-run to re-seed)
+- CLOUD: [ ] prod: seed + deploy (awaiting Bilal's go-ahead for prod)
 - iOS:   [ ] fetch on launch → cache → bundled fallback (airplane-mode safe)
 - **Accept:** edit a criterion in Firestore → phone shows it without an app
   update; airplane mode still fully works.
-- **Interface:**
+- **Interface (SETTLED 2026-07-08 — iOS chat can build against this):**
   base URL dev:  `https://medadvisor-api-743594385075.us-west1.run.app`
   base URL prod: `https://medadvisor-api-597896295002.us-west1.run.app`
-  (`GET /health` live on both; `GET /v1/rubrics` returns 501 until MC1)
+
+  `GET /v1/rubrics` → 200
+  ```json
+  {
+    "rubrics": [
+      {
+        "id": "outpatient-clinic",
+        "version": "0.1.0-draft",
+        "updatedAt": "2026-07-08T21:04:11.123Z",
+        "rubric": { …full rubric document, byte-identical shape to
+                    medadvisor/rubrics/*.json (validates against
+                    rubric.schema.json — reuse the existing decoder)… }
+      }
+    ],
+    "count": 2,
+    "fetchedAt": "2026-07-08T21:05:00.000Z"
+  }
+  ```
+  `GET /v1/rubrics/:id` → 200 `{ "id", "version", "updatedAt", "rubric" }`
+  (same item shape as the list) · unknown id → 404 `{ "error": "not_found" }`
+  · server fault → 500 `{ "error": "internal" }`
+
+  Semantics:
+  - `version` = the rubric's own semver (`rubric.version` surfaced for
+    convenience; bumped by humans on criterion changes per the schema).
+  - `updatedAt` = Firestore document update time (auto-bumps on ANY console
+    edit, even if `version` wasn't touched) — use `(version, updatedAt)` as
+    the cache key; refresh cache when either differs.
+  - `fetchedAt` = server time of the response; use it (not device clock) to
+    stamp the cache.
+  - No auth (public read by design); responses send
+    `Cache-Control: public, max-age=300`.
+  - Firestore: collection `rubrics`, doc ID = rubric `id`, doc content =
+    the pristine rubric document (nothing else) — the MC4 editor and the
+    console both edit it 1:1.
 
 ## MC2 — Accounts & orgs                               Status: NOT STARTED
 Identity Platform (email + Sign in with Apple), tenants = orgs, invite codes.
