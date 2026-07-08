@@ -31,7 +31,7 @@ Secret Manager, Identity Platform enabled; hello-world server deployed.
   under MC1). Budget alert config verified via CLI; the alert *email* only
   fires when spend crosses a threshold — can't be simulated, watch for it.
 
-## MC1 — Cloud rubrics                                 Status: IN PROGRESS
+## MC1 — Cloud rubrics                    Status: CLOUD DONE 2026-07-08 (iOS pending)
 Rubrics in Firestore with versioning; public read API; director-editable later
 (MC4). iOS fetches on launch, caches, falls back to bundled copy offline.
 - CLOUD: [x] `GET /v1/rubrics` + `GET /v1/rubrics/:id` — live on dev,
@@ -39,7 +39,7 @@ Rubrics in Firestore with versioning; public read API; director-editable later
       Firestore round-trip byte-identical to source JSONs)
 - CLOUD: [x] seed from `medadvisor/rubrics/*.json` via
       `node infra/seed-rubrics.mjs dev|prod` (idempotent; re-run to re-seed)
-- CLOUD: [ ] prod: seed + deploy (awaiting Bilal's go-ahead for prod)
+- CLOUD: [x] prod: seeded + deployed, endpoints verified (2 rubrics, 404 path)
 - iOS:   [ ] fetch on launch → cache → bundled fallback (airplane-mode safe)
 - **Accept:** edit a criterion in Firestore → phone shows it without an app
   update; airplane mode still fully works.
