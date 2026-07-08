@@ -6,7 +6,7 @@ Console steps Bilal clicks + commands run on the mini. No secrets in this file.
 
 1. Sign in with the Google account that will own everything (Bilal's).
 2. Top bar project picker → **New Project** → name `medadvisor-dev` → Create.
-3. Repeat for `medadvisor-prod`.
+3. Repeat for `medadvisor-production` (`medadvisor-prod` is taken globally).
 4. Both projects: attach the billing account when prompted.
 
 ## 2. Billing protection (do this BEFORE anything can cost money)
@@ -27,7 +27,7 @@ gcloud services enable run.googleapis.com firestore.googleapis.com \
   --project medadvisor-dev
 ```
 
-(Repeat with `--project medadvisor-prod`.)
+(Repeat with `--project medadvisor-production`.)
 
 - Firestore: console → Firestore → Create database → Native mode → region
   `us-west1` (or nearest) → production rules (deny-by-default).
@@ -40,34 +40,45 @@ gcloud services enable run.googleapis.com firestore.googleapis.com \
 brew install --cask google-cloud-sdk
 ```
 
-Then Bilal authenticates interactively (type it with the `!` prefix in chat,
-or in a plain terminal):
+The mini's gcloud serves several projects (bithunch, offloadai), so MedAdvisor
+gets its own named configuration instead of the default one:
 
 ```sh
-gcloud auth login
-gcloud config set project medadvisor-dev
+gcloud config configurations create medadvisor --no-activate
 ```
+
+All MedAdvisor gcloud commands select it via the env var — never activate it
+globally, so other projects' active accounts are untouched:
+
+```sh
+export CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor
+```
+
+Then Bilal authenticates interactively inside that configuration (type it
+with the `!` prefix in chat, or in a plain terminal):
+
+```sh
+CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor gcloud auth login --no-launch-browser
+CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor gcloud config set project medadvisor-dev
+```
+
+(`infra/deploy.sh` exports the env var itself, so deploys are always pinned.)
 
 ## 5. Deploy the hello-world (MC0 acceptance)
 
-From `server/` — Cloud Run builds the Dockerfile remotely, no local docker
-needed:
+One command per environment (Cloud Run builds the Dockerfile remotely via
+Cloud Build — no local docker needed):
 
 ```sh
-gcloud run deploy medadvisor-api \
-  --source . \
-  --project medadvisor-dev \
-  --region us-west1 \
-  --allow-unauthenticated \
-  --min-instances 0 --max-instances 2 \
-  --set-env-vars APP_ENV=dev
+infra/deploy.sh dev    # deploy + verify /health on medadvisor-dev
+infra/deploy.sh prod   # same for medadvisor-prod
 ```
 
-It prints a service URL. Verify:
-
-```sh
-curl https://<printed-url>/health   # → {"ok":true,...,"env":"dev"}
-```
-
-Repeat with `--project medadvisor-prod` / `APP_ENV=prod` for prod.
+The script prints the service URL and curls `/health`
+(expect `{"ok":true,...,"env":"dev"}`).
 Record both URLs in PLAN.md under MC1's Interface section.
+
+Note: the mini's gcloud has multiple credentialed accounts (bithunch,
+offloadai). MedAdvisor lives on Bilal's personal account inside the
+`medadvisor` configuration (section 4); `deploy.sh` pins itself to it, and
+any manual gcloud command should set `CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor`.

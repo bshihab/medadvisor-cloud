@@ -13,15 +13,23 @@ them. Decisions log at the bottom.
 
 ---
 
-## MC0 — Foundations                                   Status: NOT STARTED
+## MC0 — Foundations                                   Status: DONE 2026-07-08
 GCP dev + prod projects; billing budget + email alerts; Cloud Run, Firestore,
 Secret Manager, Identity Platform enabled; hello-world server deployed.
-- [ ] GCP projects `medadvisor-dev` + `medadvisor-prod` (Bilal's account)
-- [ ] Billing budget with alert emails on both (e.g. alert $10, cap review $50)
-- [ ] gcloud CLI authed on the mini
-- [ ] `server/` hello-world deploys to Cloud Run dev + prod with one command
-- **Accept:** `curl https://<dev-url>/health` → `{"ok":true}` on both envs;
-  budget alert email verified.
+- [x] GCP projects `medadvisor-dev` + `medadvisor-production` (shihabbilal@gmail.com;
+      the ID `medadvisor-prod` was taken globally)
+- [x] Billing: account `019BCD-D40BE9-C2BA03`; $10/mo budget per project with
+      50/90/100% email alerts (emails go to billing admins = Bilal)
+- [x] gcloud on the mini: dedicated config `medadvisor` — never activated
+      globally; all commands use `CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor`
+- [x] One-command deploy: `infra/deploy.sh dev|prod` (Cloud Build source
+      deploy, min 0 / max 2 instances, verifies /health)
+- [x] Also done ahead of MC1/MC2: Firestore Native DBs created (us-west1)
+      and APIs enabled (run, firestore, secretmanager, identitytoolkit,
+      cloudbuild, artifactregistry, billingbudgets) on both projects
+- **Accept:** ✅ `/health` → `{"ok":true,...}` verified on both envs (URLs
+  under MC1). Budget alert config verified via CLI; the alert *email* only
+  fires when spend crosses a threshold — can't be simulated, watch for it.
 
 ## MC1 — Cloud rubrics                                 Status: NOT STARTED
 Rubrics in Firestore with versioning; public read API; director-editable later
@@ -31,7 +39,10 @@ Rubrics in Firestore with versioning; public read API; director-editable later
 - iOS:   [ ] fetch on launch → cache → bundled fallback (airplane-mode safe)
 - **Accept:** edit a criterion in Firestore → phone shows it without an app
   update; airplane mode still fully works.
-- **Interface (fill in when live):** base URL dev: ____  prod: ____
+- **Interface:**
+  base URL dev:  `https://medadvisor-api-743594385075.us-west1.run.app`
+  base URL prod: `https://medadvisor-api-597896295002.us-west1.run.app`
+  (`GET /health` live on both; `GET /v1/rubrics` returns 501 until MC1)
 
 ## MC2 — Accounts & orgs                               Status: NOT STARTED
 Identity Platform (email + Sign in with Apple), tenants = orgs, invite codes.
@@ -82,3 +93,11 @@ Tier-2 sharing: scores + redacted evidence quotes, nothing else.
 - 2026-07-08 Stack per Bilal's dad: Cloud Run (Docker, min 0/low max),
   Firestore, Secret Manager, dev/staging/prod, rate limits, small browser
   bundle, deploy prebuilt bundles.
+- 2026-07-08 **Prod project ID is `medadvisor-production`** — `medadvisor-prod`
+  was already taken in GCP's global namespace.
+- 2026-07-08 **Billing account `019BCD-D40BE9-C2BA03`** ("My Billing Account 1")
+  funds both projects; the other account (016647) was at its 5-project link
+  quota. Owner: shihabbilal@gmail.com.
+- 2026-07-08 **Dedicated gcloud config `medadvisor`** on the mini (the machine
+  also serves bithunch/offloadai). Selected per-command via
+  `CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor`, never activated globally.
