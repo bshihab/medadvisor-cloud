@@ -86,11 +86,19 @@ Rubrics in Firestore with versioning; public read API; director-editable later
 ## MC2 — Accounts & orgs                               Status: IN PROGRESS
 Identity Platform (email + Sign in with Apple), project-level accounts (see
 amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
-- CLOUD: [ ] Identity Platform config, org model, invite-code issue/redeem
-- CLOUD: [ ] Firestore security rules: deny-by-default (all access is
-      server-mediated; org scoping enforced in the API)
+- CLOUD: [x] Identity Platform config, org model, invite-code issue/redeem —
+      LIVE ON DEV, all paths verified (signup→redeem→claims→roster, 401/403/
+      404, idempotent redeem, lowercase normalization). PROD pending approval.
+- CLOUD: [x] Firestore security rules: deny-by-default deployed to dev
+      (`infra/firestore.rules` via `node infra/deploy-rules.mjs dev|prod`)
 - iOS:   [ ] optional login UI; "Join my program" invite-code flow
-- DASH:  [ ] admin login page (minimal)
+- DASH:  [x] admin login page (minimal) — `<base-url>/admin` (email+password
+      → roster table; real dashboard is MC4)
+- **Dev test fixtures (for iOS-lane testing):** org `org-directors-program`
+  ("Director's Program"); trainee invite code `U3HP8KBK` (50 uses, expires
+  2026-08-07); test accounts `director.test@medadvisor.app` (admin) and
+  `trainee.test@medadvisor.app` — dev only, throwaway.
+  Bootstrap/reseed: `node infra/bootstrap-org.mjs dev <orgId> "<name>" <email>`.
 - **Accept:** create org → trainee joins via code on phone → director logs into
   web and sees roster (no session data yet).
 - **Interface (SETTLED 2026-07-08 — iOS chat can build against this):**

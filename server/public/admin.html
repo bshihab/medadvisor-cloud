@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MedAdvisor — Admin</title>
+<style>
+  :root { color-scheme: light dark; font-family: -apple-system, system-ui, sans-serif; }
+  body { max-width: 640px; margin: 3rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.3rem; }
+  form { display: flex; gap: .5rem; flex-wrap: wrap; margin: 1rem 0; }
+  input { padding: .5rem; font-size: 1rem; }
+  button { padding: .5rem 1rem; font-size: 1rem; cursor: pointer; }
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+  th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #8884; }
+  #status { color: #b00; min-height: 1.2em; }
+  .muted { opacity: .7; font-size: .9em; }
+</style>
+</head>
+<body>
+<h1>MedAdvisor — mentor admin (MC2 minimal; real dashboard lands in MC4)</h1>
+<form id="login">
+  <input id="email" type="email" placeholder="email" autocomplete="username" required>
+  <input id="password" type="password" placeholder="password" autocomplete="current-password" required>
+  <button type="submit">Sign in</button>
+</form>
+<p id="status"></p>
+<div id="roster" hidden>
+  <h2 id="orgname" style="font-size:1.1rem"></h2>
+  <table>
+    <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Joined</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <p class="muted" id="count"></p>
+</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+const cfg = await fetch("/v1/client-config").then((r) => r.json());
+const auth = getAuth(initializeApp(cfg));
+const $ = (id) => document.getElementById(id);
+
+$("login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("status").textContent = "";
+  try {
+    const cred = await signInWithEmailAndPassword(auth, $("email").value, $("password").value);
+    const token = await cred.user.getIdToken(true);
+    const me = await fetch("/v1/me", { headers: { authorization: `Bearer ${token}` } }).then((r) => r.json());
+    if (!me.org || me.org.role !== "admin") {
+      $("status").textContent = "This account is not an org admin.";
+      return;
+    }
+    const data = await fetch(`/v1/orgs/${me.org.orgId}/members`, {
+      headers: { authorization: `Bearer ${token}` },
+    }).then((r) => r.json());
+    $("orgname").textContent = me.org.name ?? me.org.orgId;
+    $("rows").innerHTML = data.members
+      .map((m) => `<tr><td>${m.email ?? ""}</td><td>${m.displayName ?? ""}</td><td>${m.role}</td><td>${(m.joinedAt ?? "").slice(0, 10)}</td></tr>`)
+      .join("");
+    $("count").textContent = `${data.count} member(s)`;
+    $("roster").hidden = false;
+  } catch (err) {
+    $("status").textContent = err?.code ?? err?.message ?? "sign-in failed";
+  }
+});
+</script>
+</body>
+</html>

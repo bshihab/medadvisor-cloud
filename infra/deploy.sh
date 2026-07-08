@@ -12,9 +12,17 @@ set -euo pipefail
 export CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor
 
 ENV="${1:-}"
+# FIREBASE_API_KEY is the public client identifier (ships in app bundles /
+# browser pages) — not a secret. Real secrets go to Secret Manager.
 case "$ENV" in
-  dev)  PROJECT="medadvisor-dev" ;;
-  prod) PROJECT="medadvisor-production" ;;  # 'medadvisor-prod' ID was taken globally
+  dev)
+    PROJECT="medadvisor-dev"
+    FIREBASE_API_KEY="AIzaSyBvHos84simxPRf4z8ICERrVz6zhYkayaE"
+    ;;
+  prod)
+    PROJECT="medadvisor-production"  # 'medadvisor-prod' ID was taken globally
+    FIREBASE_API_KEY="${PROD_FIREBASE_API_KEY:-}"  # set after prod IdP init
+    ;;
   *) echo "usage: $(basename "$0") dev|prod" >&2; exit 1 ;;
 esac
 
@@ -29,7 +37,7 @@ gcloud run deploy "$SERVICE" \
   --region "$REGION" \
   --allow-unauthenticated \
   --min-instances 0 --max-instances 2 \
-  --set-env-vars "APP_ENV=$ENV" \
+  --set-env-vars "APP_ENV=$ENV,PROJECT_ID=$PROJECT,FIREBASE_API_KEY=$FIREBASE_API_KEY" \
   --quiet
 
 URL="$(gcloud run services describe "$SERVICE" \
