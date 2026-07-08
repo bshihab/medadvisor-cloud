@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.*
+*.local
+# never commit credentials
+*service-account*.json
+*.pem
+*.p12
+.DS_Store
