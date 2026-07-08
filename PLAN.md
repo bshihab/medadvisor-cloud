@@ -166,8 +166,10 @@ Tier-2 sharing: scores + redacted evidence quotes, nothing else.
 - iOS:   [ ] "Share with mentor" review screen: trainee sees EXACT payload,
       edits/removes quotes, confirms → upload (org-scoped)
 - iOS:   [ ] Cross-device restore of own history when logged in
-- CLOUD: [ ] `POST /v1/sessions` + reads (below) — needed by both MC3 and MC4;
-      build server-side alongside MC4.
+- CLOUD: [x] `POST /v1/sessions` + reads (below) — LIVE ON DEV, full contract
+      verified (idempotent replace, transcript-key rejection at both levels,
+      enum/limit validation, restore read, org read ± uid filter, 401/403).
+      Prod deploy pending approval.
 - **Accept:** shared session appears on dashboard in seconds; a planted patient
   name is caught by NER or visibly removable at the gate; second device
   restores history; nothing uploads without explicit confirm.
@@ -218,7 +220,8 @@ Tier-2 sharing: scores + redacted evidence quotes, nothing else.
     rubricId, rubricVersion, summary, criteria}` (server-only access,
     same deny-all rules).
 
-## MC4 — Mentor dashboard v1 (cloud lane)              Status: NOT STARTED
+## MC4 — Mentor dashboard v1 (cloud lane)              Status: IN PROGRESS
+Data feeds ready: roster (MC2) + sessions reads (MC3 cloud, ± uid filter).
 - [ ] Cohort view: trainees, session counts, per-dimension trend lines
 - [ ] Trainee drill-in: per-session scores + evidence quotes
 - [ ] Rubric editor for the director (writes MC1 store, versioned)
