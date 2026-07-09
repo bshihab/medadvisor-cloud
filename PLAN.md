@@ -538,6 +538,28 @@ fallback (MC6 semantics unchanged).
 
 ---
 
+## Unified skill-area visualization spec (PROPOSED by iOS chat 2026-07-09 —
+## dashboard chat: mirror it in the drill-in, then flip to SETTLED)
+
+One visual language for "progress by skill area" on ALL surfaces (trainee
+Insights, native mentor Cohort tab — both shipped — and the web dashboard):
+
+- One ROW per skill area: `label · bar · percent · trend line`.
+- **Bar**: horizontal, fully-rounded ends (capsule), thin (~10px), track in a
+  faint neutral; fill width = CURRENT (latest session's) score 0–100%.
+- **Percent**: right of the bar, semibold, monospaced digits, same color as
+  the bar fill.
+- **Trend line**: small sparkline (~56×20px, 2px stroke, smooth/catmull-rom)
+  of the score across sessions chronologically; colored by the LATEST value's
+  band. Omit (keep the space) when fewer than 2 sessions.
+- **Band colors** (iOS system palette – use these hex values on the web):
+  score < 40% red `#FF3B30` · 40–74% orange `#FF9500` · ≥ 75% green
+  `#34C759`. Bands also name levels: Emerging / Developing / Proficient.
+- **Score convention everywhere**: met=1, partial=0.5, missed=0, N/A
+  excluded; dimension score = mean over its criteria in that session.
+  (This REPLACES the old trainee-side "done-rate" met/total math for these
+  charts, and matches the dashboard's existing convention.)
+
 ## Decisions log
 
 - 2026-07-08 **Tier 2 sync** (scores + redacted quotes) with Tier-3-grade
