@@ -498,8 +498,9 @@ fallback (MC6 semantics unchanged).
       server never touches it.)
 - BILAL: [ ] grant the runtime SA permission to send FCM (approval-gated
       IAM; run via `!` when ready):
-      `CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor gcloud projects add-iam-policy-binding medadvisor-dev --member serviceAccount:medadvisor-api@medadvisor-dev.iam.gserviceaccount.com --role roles/firebasemessaging.admin --condition=None`
-      (repeat with medadvisor-production)
+      `CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor gcloud projects add-iam-policy-binding medadvisor-dev --member=serviceAccount:medadvisor-api@medadvisor-dev.iam.gserviceaccount.com --role=roles/firebasecloudmessaging.admin --condition=None`
+      (repeat with medadvisor-production; NOTE the role is
+      `firebasecloudmessaging.admin` — `firebasemessaging.admin` doesn't exist)
 - CLOUD: [x] token registry endpoints — LIVE ON DEV, contract verified
       (register/upsert/delete 200, malformed 400, unauthenticated 401)
 - CLOUD: [x] send push on note create — LIVE ON DEV; proven non-fatal:
