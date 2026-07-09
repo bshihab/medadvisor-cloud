@@ -864,9 +864,11 @@ app.get("/v1/client-config", (_req, res) => {
   });
 });
 
+// public/ is the prebuilt Vite bundle (dashboard/ is the source; deploy.sh
+// builds it before every deploy). /admin stays the canonical URL.
 app.use(express.static(fileURLToPath(new URL("./public", import.meta.url))));
 app.get("/admin", (_req, res) => {
-  res.sendFile(fileURLToPath(new URL("./public/admin.html", import.meta.url)));
+  res.sendFile(fileURLToPath(new URL("./public/index.html", import.meta.url)));
 });
 
 app.use((err, _req, res, _next) => {

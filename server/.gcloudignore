@@ -1,0 +1,5 @@
+# Cloud Build context for gcloud run deploy --source server/
+# node_modules is reinstalled by the Dockerfile; public/ (the prebuilt
+# dashboard bundle) MUST be uploaded — do not ignore it here.
+.gcloudignore
+node_modules/

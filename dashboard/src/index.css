@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/* MedAdvisor ambient theme — blue/indigo/purple family, light + dark,
+   matching the iOS app's feel (MC4.5 direction carried forward). */
+@theme {
+  --color-background: #f6f5fb;
+  --color-card: #ffffff;
+  --color-ink: #1e1b2e;
+  --color-muted: #6b6885;
+  --color-line: #e4e2f0;
+  --color-brand-blue: #3b82f6;
+  --color-brand-indigo: #6366f1;
+  --color-brand-purple: #8b5cf6;
+  --color-band-low: #ff3b30;
+  --color-band-mid: #ff9500;
+  --color-band-high: #34c759;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #14121f;
+    --color-card: #1e1b2e;
+    --color-ink: #edecf6;
+    --color-muted: #a5a3bd;
+    --color-line: #322e4a;
+  }
+}
+
+html { color-scheme: light dark; }
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-ink);
+  font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
+  min-height: 100vh;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(600px 400px at 8% -5%, rgb(59 130 246 / 0.14), transparent 70%),
+    radial-gradient(700px 500px at 105% 15%, rgb(139 92 246 / 0.13), transparent 70%),
+    radial-gradient(500px 400px at 50% 110%, rgb(99 102 241 / 0.1), transparent 70%);
+}

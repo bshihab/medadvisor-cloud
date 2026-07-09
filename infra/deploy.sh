@@ -30,6 +30,10 @@ REGION="us-west1"
 SERVICE="medadvisor-api"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+echo ">>> building dashboard bundle (Vite -> server/public)"
+[ -d "$ROOT/dashboard/node_modules" ] || npm --prefix "$ROOT/dashboard" ci --silent
+npm --prefix "$ROOT/dashboard" run build >/dev/null
+
 echo ">>> deploying $SERVICE to $PROJECT ($REGION, APP_ENV=$ENV)"
 gcloud run deploy "$SERVICE" \
   --source "$ROOT/server" \

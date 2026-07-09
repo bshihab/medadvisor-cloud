@@ -558,10 +558,17 @@ rebuild carries the MC8 UIs so nothing is built twice.
       non-author edit 403), threads ride chronologically in me/org reads
       with authorRole, root delete cascades the thread, reply push wired
       through the MC7 sender both directions.
-- DASH:  [ ] React rebuild: Vite + Tailwind + shadcn/ui + Recharts;
-      person-first IA (pick a person → summary/progress | sessions &
-      conversations); carries criterion-comment affordance + thread view.
-      Same Express container serves the built bundle; code-split.
+- DASH:  [x] React rebuild LIVE ON DEV (prod held for Bilal's eyeball):
+      `dashboard/` = Vite + React + TS + Tailwind + shadcn-style components
+      + Recharts (lazy-loaded — entry path ~62 kB gz, Recharts chunk only
+      on the skill-detail route). Person-first IA: People page (avatar
+      cards + invites) → person → Summary (unified skill rows → Recharts
+      detail with tap-to-session points) | Sessions & Conversations
+      (general-note threads, session cards with per-criterion 💬 threads,
+      retraction lines). Browser-QA'd end-to-end incl. criterion-comment
+      and reply round-trips through the UI; zero console errors.
+      Build pipeline: deploy.sh runs the Vite build → server/public
+      (gitignored, prebuilt-bundle decision); vanilla SPA retired.
 - iOS:   [ ] criterion comments inline in the rubric view; reply UI —
       consumes the contracts below.
 - **Accept:** mentor comments on one criterion on the web → trainee sees it
