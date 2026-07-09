@@ -376,12 +376,18 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
   shared session → it vanishes from the dashboard and its notes cascade away;
   a fresh account redeeming a mentor code becomes a Mentor who sees the
   roster.
-- CLOUD: [ ] retraction markers (contract below; relayed brief 2026-07-08)
-- CLOUD: [ ] `GET /v1/orgs/:orgId/invites` for the make-key UI (below)
-- DASH:  [ ] retraction lines in the drill-in timeline (muted, no card, no
-      counts/trends impact)
-- DASH:  [ ] make-key UI: "New invite code" button + active-codes list +
-      clearly-labeled Mentor-code option
+- CLOUD: [x] retraction markers — LIVE ON DEV, verified: marker is exactly
+      the 4 contentless fields (planted "secret" summary/quote provably
+      unrecoverable), same-batch atomicity both directions (delete→marker,
+      re-share→marker cleared), trainee reads 403. Prod held.
+- CLOUD: [x] `GET /v1/orgs/:orgId/invites` — live on dev (active+unexpired
+      only, newest first, audited)
+- DASH:  [x] retraction lines in the drill-in timeline (muted italic line,
+      no card, excluded from counts/trends) — browser-verified on dev
+- DASH:  [x] make-key UI: mint button with Trainee/Mentor picker (Mentor
+      minted single-use + labeled "full program access"), fresh-code
+      callout with Copy, active-codes table — browser-verified end-to-end
+      (minted QHNCS8YG through the UI)
 - **Compatibility note for the iOS lane:** `GET /v1/me/sessions` and
   `GET /v1/orgs/:orgId/sessions` item shapes are UNCHANGED by MC6 (including
   by retraction markers — those are a separate admin-only read). Notes are

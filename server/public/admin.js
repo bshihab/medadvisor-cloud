@@ -17,7 +17,10 @@ const fmtDay = (iso) => (iso ? iso.slice(0, 10) : "—");
 const cfg = await fetch("/v1/client-config").then((r) => r.json());
 const auth = getAuth(initializeApp(cfg));
 
-const state = { me: null, members: [], sessions: [], notes: [], rubrics: [], editingNoteId: null };
+const state = {
+  me: null, members: [], sessions: [], notes: [], rubrics: [],
+  retractions: [], invites: [], editingNoteId: null, freshCode: null,
+};
 
 async function api(path, opts = {}) {
   const token = await auth.currentUser.getIdToken();
@@ -65,16 +68,20 @@ async function loadAll() {
   if (!me.org || me.org.role !== "admin") throw new Error("This account is not a Mentor of any program.");
   state.me = me;
   const org = me.org.orgId;
-  const [members, sessions, notes, rubrics] = await Promise.all([
+  const [members, sessions, notes, rubrics, retractions, invites] = await Promise.all([
     api(`/v1/orgs/${org}/members`),
     api(`/v1/orgs/${org}/sessions?limit=500`),
     api(`/v1/orgs/${org}/notes?limit=500`),
     fetch("/v1/rubrics").then((r) => r.json()),
+    api(`/v1/orgs/${org}/retractions?limit=500`),
+    api(`/v1/orgs/${org}/invites`),
   ]);
   state.members = members.members;
   state.sessions = sessions.sessions;
   state.notes = notes.notes;
   state.rubrics = rubrics.rubrics;
+  state.retractions = retractions.retractions;
+  state.invites = invites.invites;
 }
 
 async function refreshNotes() {
@@ -135,10 +142,40 @@ function notesBlock(uid, sessionId, title) {
 }
 
 // ---------- views ----------
+function invitesCard() {
+  const rows = state.invites.map((i) => `<tr>
+    <td><code>${esc(i.code)}</code></td>
+    <td>${roleBadge(i.role)}</td>
+    <td>${i.uses}/${i.maxUses ?? "∞"}</td>
+    <td>${fmtDay(i.expiresAt)}</td>
+    <td><button class="small" data-action="copy-code" data-code="${esc(i.code)}">Copy</button></td>
+  </tr>`).join("");
+  return `<div class="card">
+    <h2 style="font-size:1.05rem">Invite codes</h2>
+    ${state.freshCode ? `<p class="ok">New ${esc(roleLabel(state.freshCode.role))} code:
+      <code style="font-size:1.1em">${esc(state.freshCode.code)}</code>
+      <button class="small" data-action="copy-code" data-code="${esc(state.freshCode.code)}">Copy</button>
+      — expires ${fmtDay(state.freshCode.expiresAt)}</p>` : ""}
+    ${rows ? `<table><thead><tr><th>Code</th><th>Grants</th><th>Uses</th><th>Expires</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table>` : '<p class="muted">No active codes — mint one below.</p>'}
+    <div class="composer"><div class="row">
+      <select id="invrole" style="width:auto">
+        <option value="trainee">Trainee</option>
+        <option value="admin">Mentor — full program access</option>
+      </select>
+      <button class="primary small" data-action="mint-code">New invite code</button>
+      <span class="err"></span>
+    </div>
+    <p class="muted" style="margin:.2rem 0 0">Trainee codes: 50 uses, 30 days.
+      Mentor codes grant full access to every trainee's shared data — mint
+      single-use, share carefully.</p></div>
+  </div>`;
+}
+
 function viewCohort() {
   if (state.members.length === 0)
     return stateBox("👋", "No members yet",
-      "Share a trainee invite code from your program to get people on board.");
+      "Mint a trainee invite code below to get people on board.") + invitesCard();
   const rows = state.members.map((m) => {
     const ss = sessionsOf(m.uid);
     return `<tr class="click" onclick="location.hash='#trainee/${esc(m.uid)}'">
@@ -150,7 +187,7 @@ function viewCohort() {
   return `<div class="card"><h2>${esc(state.me.org.name)}</h2>
     <p class="muted">Tap a member to see their sessions and notes.</p>
     <table><thead><tr><th>Member</th><th>Role</th><th>Sessions</th><th>Last shared</th><th>Trend</th></tr></thead>
-    <tbody>${rows}</tbody></table></div>`;
+    <tbody>${rows}</tbody></table></div>` + invitesCard();
 }
 
 function viewTrainee(uid) {
@@ -168,7 +205,17 @@ function viewTrainee(uid) {
       <div>${pct(latest)}</div></div>`;
   }).join("");
 
-  const cards = [...ss].reverse().map((s) => {
+  // Timeline = session cards + muted retraction lines, newest first.
+  // Retractions are contentless by design (see PLAN.md) — line only, no
+  // card, and they never count toward totals or trends.
+  const timeline = [
+    ...ss.map((s) => ({ type: "session", at: s.recordedAt ?? "", s })),
+    ...state.retractions
+      .filter((r) => r.traineeUid === uid)
+      .map((r) => ({ type: "retraction", at: r.recordedAt ?? "", r })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+
+  const cardOf = (s) => {
     const rub = rubricDoc(s.rubricId);
     const promptOf = (cid) => rub?.criteria?.find((c) => c.id === cid)?.prompt ?? cid;
     const byDim = {};
@@ -189,7 +236,14 @@ function viewTrainee(uid) {
       <details><summary class="muted">Criteria (${s.criteria.length})</summary>${groups}</details>
       <div style="margin-top:.6rem">${notesBlock(uid, s.sessionId, "Session notes")}</div>
     </div>`;
-  }).join("");
+  };
+
+  const timelineHtml = timeline.map((t) =>
+    t.type === "session"
+      ? cardOf(t.s)
+      : `<p class="muted retraction">A session from ${fmtDay(t.r.recordedAt)} was retracted
+         by the trainee on ${fmtDay(t.r.retractedAt)}.</p>`,
+  ).join("");
 
   return `<p><a href="#cohort">← Cohort</a></p>
     <div class="card">
@@ -198,7 +252,7 @@ function viewTrainee(uid) {
                   : '<p class="muted">No shared sessions yet — trends appear once the trainee shares.</p>'}
     </div>
     <div class="card">${notesBlock(uid, null, "General notes")}</div>
-    ${cards || stateBox("📭", "No shared sessions",
+    ${timelineHtml || stateBox("📭", "No shared sessions",
       "Sessions appear here as soon as the trainee shares them from the app.")}`;
 }
 
@@ -319,6 +373,20 @@ document.addEventListener("click", async (e) => {
       btn.disabled = true;
       await api(`/v1/orgs/${org}/notes/${btn.dataset.id}`, { method: "DELETE" });
       await refreshNotes(); render();
+    } else if (btn.dataset.action === "mint-code") {
+      btn.disabled = true;
+      const role = $("invrole").value;
+      state.freshCode = await api(`/v1/orgs/${org}/invites`, {
+        method: "POST",
+        body: JSON.stringify(role === "admin" ? { role, maxUses: 1 } : { role }),
+      });
+      const fresh = await api(`/v1/orgs/${org}/invites`);
+      state.invites = fresh.invites;
+      render();
+    } else if (btn.dataset.action === "copy-code") {
+      await navigator.clipboard.writeText(btn.dataset.code);
+      btn.textContent = "Copied!";
+      setTimeout(() => { btn.textContent = "Copy"; }, 1500);
     }
   } catch (ex) {
     btn.disabled = false;
@@ -328,6 +396,7 @@ document.addEventListener("click", async (e) => {
 
 // ---------- router / auth ----------
 function render() {
+  if (!state.me) return; // signed-out hashchange must not paint views
   const h = location.hash || "#cohort";
   const [, page, arg] = h.match(/^#([a-z]+)(?:\/(.+))?$/) ?? [];
   document.querySelectorAll("nav.top a.tab").forEach((a) => {

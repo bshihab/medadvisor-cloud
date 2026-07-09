@@ -296,8 +296,11 @@ app.post("/v1/sessions", requireAuth, async (req, res, next) => {
     const b = req.body;
     const sessionId = `${req.user.uid}__${b.clientSessionId}`;
     // set() replaces: re-POST of the same clientSessionId never duplicates,
-    // last confirmed payload wins.
-    await db.doc(`orgs/${req.user.orgId}/sessions/${sessionId}`).set({
+    // last confirmed payload wins. Re-sharing also clears any retraction
+    // marker in the same batch — latest trainee intent wins.
+    const upsertBatch = db.batch();
+    upsertBatch.delete(db.doc(`orgs/${req.user.orgId}/retractions/${sessionId}`));
+    upsertBatch.set(db.doc(`orgs/${req.user.orgId}/sessions/${sessionId}`), {
       uid: req.user.uid,
       orgId: req.user.orgId,
       clientSessionId: b.clientSessionId,
@@ -315,6 +318,7 @@ app.post("/v1/sessions", requireAuth, async (req, res, next) => {
         tip: c.tip ?? null,
       })),
     });
+    await upsertBatch.commit();
     audit(req, "session.upsert", { sessionId, rubricId: b.rubricId });
     res.json({ sessionId });
   } catch (err) {
@@ -505,9 +509,63 @@ app.delete("/v1/sessions/:clientSessionId", requireAuth, async (req, res, next) 
     const batch = db.batch();
     notesSnap.docs.forEach((d) => batch.delete(d.ref));
     batch.delete(ref);
+    // Contentless retraction marker (see PLAN.md + decisions log): the
+    // mentor timeline may say a session WAS retracted, but nothing
+    // rereadable survives. Same atomic batch as the deletion.
+    batch.set(db.doc(`orgs/${req.user.orgId}/retractions/${sessionId}`), {
+      traineeUid: req.user.uid,
+      recordedAt: snap.get("recordedAt") ?? null,
+      receivedAt: snap.get("receivedAt") ?? null,
+      retractedAt: FieldValue.serverTimestamp(),
+    });
     await batch.commit();
     audit(req, "session.delete", { sessionId, cascadedNotes: notesSnap.size });
     res.json({ deleted: true, sessionId });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get("/v1/orgs/:orgId/retractions", requireAuth, requireOrgAdmin, async (req, res, next) => {
+  try {
+    let q = db.collection(`orgs/${req.params.orgId}/retractions`);
+    if (req.query.uid) q = q.where("traineeUid", "==", String(req.query.uid));
+    const snap = await q.get();
+    const retractions = snap.docs
+      .map((d) => {
+        const r = d.data();
+        return {
+          traineeUid: r.traineeUid,
+          recordedAt: r.recordedAt?.toDate()?.toISOString() ?? null,
+          receivedAt: r.receivedAt?.toDate()?.toISOString() ?? null,
+          retractedAt: r.retractedAt?.toDate()?.toISOString() ?? null,
+        };
+      })
+      .sort((a, b) => (b.retractedAt ?? "").localeCompare(a.retractedAt ?? ""))
+      .slice(0, clampLimit(req.query.limit));
+    res.json({ retractions, count: retractions.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get("/v1/orgs/:orgId/invites", requireAuth, requireOrgAdmin, async (req, res, next) => {
+  try {
+    const snap = await db.collection("inviteCodes").where("orgId", "==", req.params.orgId).get();
+    const now = new Date();
+    const invites = snap.docs
+      .filter((d) => d.get("active") && (!d.get("expiresAt") || d.get("expiresAt").toDate() > now))
+      .map((d) => ({
+        code: d.id,
+        role: d.get("role"),
+        uses: d.get("uses") ?? 0,
+        maxUses: d.get("maxUses") ?? null,
+        createdAt: d.get("createdAt")?.toDate()?.toISOString() ?? null,
+        expiresAt: d.get("expiresAt")?.toDate()?.toISOString() ?? null,
+      }))
+      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+    audit(req, "org.invites.read", { org: req.params.orgId });
+    res.json({ invites, count: invites.length });
   } catch (err) {
     next(err);
   }
