@@ -293,6 +293,101 @@ Full control-by-control status: `infra/security-checklist.md`.
   and confirmed on both services. (Budget alert *email* still pending a
   real threshold crossing — noted in MC0.)
 
+## MC4.5 — Dashboard redesign (cloud lane)             Status: NOT STARTED
+Real login screen + full visual pass to match the iOS app's feel. Still
+vanilla JS, no framework (polish ≠ rewrite; framework decision stands).
+- [ ] Login screen: its own page state (not the bare form) — centered card,
+      product identity, blue/indigo/purple ambient palette, friendly errors
+      ("Wrong password" not `auth/invalid-credential`)
+- [ ] Visual pass on all views: rounded cards, generous spacing, ambient
+      gradient background, consistent type scale
+- [ ] Proper loading / empty / error states for every view (cohort,
+      drill-in, rubrics, editor, notes)
+- [ ] Wording: "Mentor"/"Trainee" everywhere user-facing (server keeps
+      admin/trainee internally — see decisions log)
+- **Accept:** Bilal puts dashboard and app side by side and calls them the
+  same family; no view renders blank on empty org or slow network.
+
+## MC6 — Mentor notes, session delete, mentor invites  Status: IN PROGRESS
+Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
+- CLOUD: [ ] notes model + endpoints (contract below)
+- CLOUD: [ ] `DELETE /v1/sessions/:clientSessionId` (contract below)
+- CLOUD: [ ] verify `role: admin` invite codes end-to-end (issue → redeem →
+      claims) — machinery shipped in MC2, needs live verification
+- DASH:  [ ] notes UI in drill-in: write/edit/delete a note on a session and
+      on the trainee generally
+- iOS:   [ ] mentor-notes display + unread badge (consumes notes reads)
+- iOS:   [ ] delete-everywhere flow (consumes DELETE + local tombstones so
+      restore doesn't resurrect device-only deletes)
+- iOS:   [ ] native read-only mentor view driven by `/v1/me` role (consumes
+      EXISTING org/sessions reads)
+- **Accept:** mentor writes one session note + one general note on the web →
+  trainee's phone shows both via pull with an unread badge; trainee deletes a
+  shared session → it vanishes from the dashboard and its notes cascade away;
+  a fresh account redeeming a mentor code becomes a Mentor who sees the
+  roster.
+- **Compatibility note for the iOS lane:** `GET /v1/me/sessions` and
+  `GET /v1/orgs/:orgId/sessions` item shapes are UNCHANGED by MC6. Notes are
+  a separate resource — join client-side via `sessionId`.
+- **Interface (SETTLED 2026-07-08 — iOS chat can build against this):**
+
+  **Mentor notes.** A note is attached to a trainee generally
+  (`sessionId: null`) or to one shared session (`sessionId` = the id from
+  the sessions API). Note item shape (all endpoints return this):
+  ```json
+  { "noteId": "auto-id", "sessionId": null,
+    "traineeUid": "…", "authorUid": "…",
+    "authorEmail": "…", "authorDisplayName": null,
+    "text": "…", "createdAt": "ISO", "updatedAt": "ISO" }
+  ```
+  - `GET /v1/me/notes?limit=` (trainee) → `{ "notes": [items], "count" }`,
+    newest first (`createdAt` desc). No org claims yet → empty list.
+  - `GET /v1/orgs/:orgId/notes?traineeUid=&sessionId=&limit=` (Mentor of
+    that org; filters optional) → same envelope, newest first.
+  - `POST /v1/orgs/:orgId/notes` (Mentor) body
+    `{ "traineeUid", "sessionId"?, "text" }` → 200 item. Validation:
+    unknown keys rejected; `traineeUid` must be an org member; if
+    `sessionId` given, the session must exist AND belong to `traineeUid`;
+    `text` 1–4000 chars. 400 `invalid_body` + detail on violation.
+  - `PATCH /v1/orgs/:orgId/notes/:noteId` body `{ "text" }` — author-only
+    (other mentors: 403) → 200 item with bumped `updatedAt`.
+  - `DELETE /v1/orgs/:orgId/notes/:noteId` — author-only → 200
+    `{ "deleted": true }`; unknown/already-deleted → 404.
+  - **Unread badge (phase 1, stated explicitly):** the server stores NO
+    read receipts. The client persists its own last-seen timestamp and
+    badges notes with `updatedAt > lastSeen`. Pull on launch/foreground —
+    no push until the APNs milestone.
+  - Firestore: `orgs/{orgId}/notes/{noteId}` (server-only access,
+    deny-all rules unchanged).
+
+  **Session delete.** `DELETE /v1/sessions/:clientSessionId` (Bearer; org
+  claims required, else 403 `forbidden`):
+  - Deletes the caller's own session — the stored doc id is
+    `{uid}__{clientSessionId}` with `uid` taken from the TOKEN, so a
+    non-owner cannot even address someone else's session (the 403-on-
+    non-owner case is enforced by construction; a foreign
+    clientSessionId resolves inside the caller's own namespace and 404s).
+  - Attached mentor notes (same `sessionId`) are deleted in the same
+    batch — a retracted session leaves nothing behind, including
+    commentary about it.
+  - → 200 `{ "deleted": true, "sessionId" }`; unknown or already deleted
+    → 404 `not_found` (clients may safely treat 404 as success —
+    repeat deletes converge on the same end state).
+  - It disappears from `GET /v1/me/sessions` and the mentor dashboard
+    immediately; iOS layers local tombstones on top so restore doesn't
+    resurrect device-only deletes.
+
+  **Mentor invite codes.** Already supported by the MC2 machinery — no new
+  endpoints: `POST /v1/orgs/:orgId/invites` with `{ "role": "admin" }`
+  mints a mentor code; redeem grants claims `{ orgId, role: "admin" }`.
+  How a mentor joins an org, the two paths:
+  1. **Bootstrap** (first mentor / director): `infra/bootstrap-org.mjs`
+     creates the account, claims, and membership directly.
+  2. **Mentor code**: an existing Mentor mints a `role: admin` code (web,
+     later) or ops mints one via the API; the new mentor signs up normally
+     and redeems it exactly like a trainee code.
+  Wire values stay `admin`/`trainee`; UI renders "Mentor"/"Trainee".
+
 ---
 
 ## Decisions log
@@ -328,3 +423,12 @@ Full control-by-control status: `infra/security-checklist.md`.
   membership/roles live in Firestore, granted by invite-code redeem (works
   before or after sign-up). IdP tenants reserved for institution SSO (MC5+).
   Still Identity Platform (BAA-eligible) — only the tenant feature is unused.
+- 2026-07-08 **Role names: "Mentor" and "Trainee"** in all user-facing
+  surfaces (app + dashboard). The server/API keeps `admin`/`trainee` as wire
+  values — renaming stored claims/roles isn't worth the migration.
+- 2026-07-08 **Roles are granted by invite, never self-declared at signup.**
+  Trainee codes exist since MC2; Mentor status comes from bootstrap or a
+  `role: admin` invite code. Signup itself carries no role.
+- 2026-07-08 **Mentor notes ship phase-1 pull-based.** No push notifications;
+  client polls on launch/foreground and badges via last-seen timestamp.
+  APNs is a future milestone.
