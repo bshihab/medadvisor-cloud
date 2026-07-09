@@ -544,16 +544,16 @@ Joint milestone. Notes gain per-criterion anchoring + threaded replies;
 dashboard rebuilt person-first on React (decision logged — amends
 "no framework"). A-fixes ship on the current dashboard immediately; the
 rebuild carries the MC8 UIs so nothing is built twice.
-- DASH:  [x] A-fixes SHIPPED (browser-verified on dev): date+time on session
+- DASH:  [x] A-fixes SHIPPED to dev + prod (browser-verified): date+time on session
       cards; "X of Y met" headline; skill rows → clickable detail chart
       with per-session points that jump to the session; invite section in
       plain words ("Trainee code · 50 uses (47 left) · expires …" /
       "Mentor code · single use"), single-use rationale caption, mint
       action separated from the list.
-- CLOUD: [x] per-criterion notes — LIVE ON DEV, verified: criterionId
+- CLOUD: [x] per-criterion notes — LIVE ON DEV + PROD, verified: criterionId
       requires sessionId (400), must exist in that session's criteria
       (400), valid path stores + surfaces it in all reads.
-- CLOUD: [x] threaded replies + reply push — LIVE ON DEV, verified: full
+- CLOUD: [x] threaded replies + reply push — LIVE ON DEV + PROD, verified: full
       authz matrix (trainee-on-own ✓, both mentors ✓, nested reply 400,
       non-author edit 403), threads ride chronologically in me/org reads
       with authorRole, root delete cascades the thread, reply push wired
