@@ -349,6 +349,15 @@ vanilla JS, no framework (polish ≠ rewrite; framework decision stands).
 - **Accept:** Bilal puts dashboard and app side by side and calls them the
   same family; no view renders blank on empty org or slow network.
   (Pending Bilal's eyeball; deployed to dev only, prod held.)
+- [ ] **Unified skill-area visualization** (2026-07-09): each skill area
+      shows a "current level" BAR + a change-over-time SPARKLINE, identical
+      semantics across the app's Progress tab, the native mentor view, and
+      this dashboard. Scoring convention unchanged (met=1, partial=0.5,
+      missed=0, na excluded). The iOS chat publishes the exact visual spec
+      (colors from the blue/indigo/purple family, bar geometry, trend style)
+      in PLAN.md — dashboard mirrors it and this item flips to SETTLED.
+      Meanwhile the dashboard ships the bar+trend structure with our
+      palette as placeholder geometry.
 
 ## MC6 — Mentor notes, session delete, mentor invites  Status: IN PROGRESS
 Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
@@ -477,6 +486,55 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
      later) or ops mints one via the API; the new mentor signs up normally
      and redeems it exactly like a trainee code.
   Wire values stay `admin`/`trainee`; UI renders "Mentor"/"Trainee".
+
+## MC7 — Push notifications (mentor note → trainee)    Status: IN PROGRESS
+Real APNs push when a mentor writes a note; pull-based badge stays as the
+fallback (MC6 semantics unchanged).
+- BILAL: [ ] APNs auth key: Apple Developer portal → Certificates, IDs &
+      Profiles → Keys → new key with "Apple Push Notifications service"
+      → download the .p8 ONCE (store it safely, never in the repo), note
+      the Key ID + Team ID. Then in Firebase console per project
+      (Project settings → Cloud Messaging → Apple app configuration)
+      upload the .p8 + Key ID + Team ID for BOTH medadvisor-dev and
+      medadvisor-production. (The .p8 lives in Firebase/Google — our
+      server never touches it.)
+- BILAL: [ ] grant the runtime SA permission to send FCM (approval-gated
+      IAM; run via `!` when ready):
+      `CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor gcloud projects add-iam-policy-binding medadvisor-dev --member serviceAccount:medadvisor-api@medadvisor-dev.iam.gserviceaccount.com --role roles/firebasemessaging.admin --condition=None`
+      (repeat with medadvisor-production)
+- CLOUD: [ ] token registry endpoints (contract below) — publish early
+- CLOUD: [ ] send push on note create (fire-and-forget; never fails the
+      note request; self-healing token cleanup)
+- iOS:   [ ] permission prompt in context; register FCM token against
+      POST /v1/me/push-token; clear on sign-out; tap → deep-link to note
+- **Accept:** mentor writes a note on the web → trainee's phone shows a
+  banner within seconds; tapping opens that note; after sign-out no more
+  pushes arrive; with notifications denied, the MC6 pull badge still works.
+- **Interface (SETTLED 2026-07-09 — iOS chat can build against this):**
+  - **What the app registers: the FCM registration token** (from the
+    Firebase Messaging iOS SDK — it wraps the raw APNs token), NOT the raw
+    APNs device token. One registration per device; multiple devices per
+    account are fine.
+  - `POST /v1/me/push-token` (Bearer; works with or without org claims)
+    body `{ "token": "<fcm-registration-token>", "platform": "ios" }` →
+    200 `{ "ok": true }`. Re-POST of the same token is an upsert
+    (refreshes lastSeen). `token` must match `[A-Za-z0-9:_-]{10,512}`;
+    violations → 400 `invalid_body`.
+  - `DELETE /v1/me/push-token` body `{ "token": "…" }` → 200
+    `{ "ok": true }`, idempotent (call on sign-out; token travels in the
+    body, not the URL, so it never lands in access logs).
+  - **Notification the phone receives** (per registered device of the
+    note's trainee, sent on mentor note create):
+    - title: `New note from your mentor`
+    - body: first ~120 chars of the note text
+    - data (all strings, for deep-linking):
+      `{ "noteId": "…", "sessionId": "" | "<sessionId>", "orgId": "…" }`
+  - Delivery is best-effort: send failures never affect the note API
+    response; tokens rejected as unregistered/invalid are deleted from the
+    registry automatically. Until the APNs key + IAM grant land, note
+    creation simply logs a non-fatal push failure.
+  - Firestore: `users/{uid}/pushTokens/{token}` `{ platform, lastSeenAt }`
+    (server-only access; deny-all rules unchanged).
 
 ---
 
