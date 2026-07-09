@@ -374,7 +374,7 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
       refresh → roster read 200. Mentor joining works exactly like trainee.
 - DASH:  [x] notes UI in drill-in (general + per-session composers, author-
       only edit/delete with two-step confirm) — verified live in a headless
-      browser: add + delete round-tripped through the API. Dev only so far.
+      browser: add + delete round-tripped through the API. Live on dev + prod.
 - iOS:   [x] mentor-notes display + unread badge (consumes notes reads) —
       BUILT (Progress card + list, local last-seen badge); device test pending
 - iOS:   [x] delete-everywhere flow — BUILT (shared dialog: device-only w/
