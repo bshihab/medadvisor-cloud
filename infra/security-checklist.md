@@ -13,29 +13,15 @@ before any real-patient use.
   invite redeem. Identity is stamped from the token, never from request bodies.
 - ✅ Admin-only routes (roster, org sessions, invite create, rubric write)
   check `role=admin` AND org match; verified 403 paths.
-- 🔒 Least-privilege runtime service account (replaces default compute SA,
-  which carries project Editor). Pending commands, per project
-  (dev shown; repeat with medadvisor-production):
-  ```sh
-  export CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor
-  gcloud iam service-accounts create medadvisor-api \
-    --display-name "MedAdvisor API runtime (least privilege)" --project medadvisor-dev
-  for R in roles/datastore.user roles/firebaseauth.admin roles/logging.logWriter; do
-    gcloud projects add-iam-policy-binding medadvisor-dev \
-      --member serviceAccount:medadvisor-api@medadvisor-dev.iam.gserviceaccount.com \
-      --role $R --condition=None; done
-  ```
-  Then uncomment `--service-account` in `infra/deploy.sh` and redeploy.
-- 🔒 Restrict the Firebase API keys to the three services client auth needs
-  (currently unrestricted — usable against any enabled API):
-  ```sh
-  gcloud services api-keys list --project <proj>   # find the key UID
-  gcloud services api-keys update <key-uid> --project <proj> \
-    --api-target=service=identitytoolkit.googleapis.com \
-    --api-target=service=securetoken.googleapis.com \
-    --api-target=service=firebaseinstallations.googleapis.com
-  ```
-  (Later: split browser vs iOS keys and add bundle-ID/referrer restrictions.)
+- ✅ Least-privilege runtime service account — done 2026-07-08 via
+  `infra/mc5-harden.sh` (run by Bilal): `medadvisor-api@<proj>` with ONLY
+  datastore.user + firebaseauth.admin + logging.logWriter, on dev AND prod;
+  Cloud Run runtime identity switched (verified) and full regression passed
+  (sign-in, token verify, Firestore read/write, admin authz).
+- ✅ Firebase API keys restricted — done 2026-07-08: all 4 keys (iOS +
+  browser, both projects) limited to identitytoolkit + securetoken +
+  firebaseinstallations; sign-in verified still working after restriction.
+  (Later: add bundle-ID/referrer restrictions per key.)
 
 ## Data
 
@@ -48,10 +34,9 @@ before any real-patient use.
   length-capped. Only Tier-2 data (scores + redacted quotes) can exist here.
 - ✅ Secrets: none in repo (gitignore covers .env/keys); Firebase API keys
   are public client identifiers by design. Real secrets → Secret Manager.
-- 🔒 Firestore data-access audit logs on prod (who read what, at the DB
-  layer; complements app-level audit): edit prod IAM policy auditConfigs to
-  add DATA_READ/DATA_WRITE for firestore.googleapis.com. (I'll do the
-  read-modify-write with gcloud once approved.)
+- ✅ Firestore data-access audit logs on prod — done 2026-07-08 via
+  `infra/mc5-harden.sh` (DATA_READ + DATA_WRITE under
+  `datastore.googleapis.com`, which is where Firestore's audit config lives).
 
 ## API hardening
 
@@ -79,8 +64,9 @@ before any real-patient use.
   acceptance covers the account's projects. Reminder: PHI only in covered
   services (Cloud Run, Firestore, Identity Platform all are); re-check the
   covered list before adding any new Google service.
-- 👤 Custom domains (dashboard + Cloudflare R2 model bucket) — needs the
-  domain name + Cloudflare account; r2.dev URL is dev-mode only.
+- ⏸ Custom domains (dashboard + Cloudflare R2 model bucket) — deferred
+  2026-07-08: Bilal is considering a product rename; revisit with the
+  rename decision, before App Store release. r2.dev URL is dev-mode only.
 - ⏸ Staging environment — proposed: defer until pre-GA (CLAUDE.md stack
   notes say "staging later"; dev serves the rehearsal role while prod has
   no real users). Also: billing account 019BCD has exactly one project

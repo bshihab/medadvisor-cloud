@@ -263,7 +263,7 @@ Data feeds ready: roster (MC2) + sessions reads (MC3 cloud, ± uid filter).
   - Rubric store stays GLOBAL (not org-scoped) in v1 — acceptable while
     org #1 is the only design partner; revisit at second institution.
 
-## MC5 — Hardening                                     Status: IN PROGRESS
+## MC5 — Hardening        Status: DONE 2026-07-08 (staging + domains deferred)
 Full control-by-control status: `infra/security-checklist.md`.
 - [x] Rate limiting (600/15min global, 20 redeem, 120 sessions, per IP) —
       verified live (429 after limit); audit logging (structured, no payload
@@ -273,16 +273,25 @@ Full control-by-control status: `infra/security-checklist.md`.
       policies on BOTH projects (to shihabbilal@gmail.com).
 - [x] Security-rules review — written up in the checklist (rules deny-all
       both envs; token/authz/no-transcript controls verified).
-- [ ] BLOCKED on Bilal approval (commands ready in checklist): least-priv
-      runtime service account (dev+prod), API-key restrictions,
-      Firestore data-access audit logs on prod, prod deploy of this build.
+- [x] Least-priv runtime SA (dev+prod, verified switched + regression pass),
+      all 4 API keys restricted to the 3 auth services, Firestore
+      data-access audit logs on prod — executed by Bilal via
+      `infra/mc5-harden.sh` 2026-07-08; hardened build live on BOTH envs.
 - [x] Google BAA — ✅ accepted 2026-07-08 by Bilal (covers the account;
       PHI only in covered services — see checklist).
-- [ ] Custom domains: dashboard + R2 bucket — needs domain name +
-      Cloudflare access from Bilal.
-- [ ] Staging environment — PROPOSED: defer to pre-GA (see checklist ⏸;
-      also consumes 019BCD's last billing slot). Awaiting Bilal's call.
-- **Accept:** security checklist pass; billing caps verified end-to-end.
+- [~] Custom domains: DEFERRED 2026-07-08 — Bilal is considering a product
+      rename, so no domain gets bought/bound yet. Cheap to defer: all URLs
+      in use are Google/Cloudflare infra URLs, invisible to end users except
+      the dashboard link. Revisit at cohort onboarding alongside the rename
+      decision (bundle ID must be settled BEFORE App Store release).
+- [~] Staging environment — DEFERRED to pre-GA per recommendation (dev
+      fills the role while prod has no real users; a staging project would
+      also consume 019BCD's last billing slot). Bilal can veto.
+- **Accept:** ✅ 2026-07-08 — security checklist pass (all controls ✅ or
+  explicitly deferred with reasons); billing caps verified: $10 budgets +
+  50/90/100 alerts on both projects, max-instances=2 enforced in deploy.sh
+  and confirmed on both services. (Budget alert *email* still pending a
+  real threshold crossing — noted in MC0.)
 
 ---
 

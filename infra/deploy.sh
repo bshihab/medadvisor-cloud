@@ -37,11 +37,9 @@ gcloud run deploy "$SERVICE" \
   --region "$REGION" \
   --allow-unauthenticated \
   --min-instances 0 --max-instances 2 \
+  --service-account "medadvisor-api@$PROJECT.iam.gserviceaccount.com" \
   --set-env-vars "APP_ENV=$ENV,PROJECT_ID=$PROJECT,FIREBASE_API_KEY=$FIREBASE_API_KEY" \
   --quiet
-  # TODO(MC5, pending Bilal approval): add
-  #   --service-account "medadvisor-api@$PROJECT.iam.gserviceaccount.com"
-  # once the least-privilege SA exists (see infra/security-checklist.md)
 
 URL="$(gcloud run services describe "$SERVICE" \
   --project "$PROJECT" --region "$REGION" --format 'value(status.url)')"
