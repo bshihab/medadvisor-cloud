@@ -323,6 +323,51 @@ app.get("/v1/orgs/:orgId/sessions", requireAuth, requireOrgAdmin, async (req, re
   }
 });
 
+// ---------- MC4: rubric editor write (admin only; contract in PLAN.md) ----------
+
+function rubricBodyError(b, id) {
+  if (typeof b !== "object" || b === null || Array.isArray(b)) return "body must be a JSON object";
+  if (b.id !== id) return "body.id must match the URL id";
+  if (typeof b.version !== "string" || !b.version) return "version is required (string)";
+  if (typeof b.name !== "string" || !b.name) return "name is required";
+  if (!Array.isArray(b.dimensions) || b.dimensions.length < 1) return "dimensions must be a non-empty array";
+  const dimIds = new Set();
+  for (const [i, d] of b.dimensions.entries()) {
+    if (typeof d !== "object" || d === null || Array.isArray(d)) return `dimensions[${i}] must be an object`;
+    if (typeof d.id !== "string" || !d.id) return `dimensions[${i}].id is required`;
+    if (typeof d.label !== "string" || !d.label) return `dimensions[${i}].label is required`;
+    dimIds.add(d.id);
+  }
+  if (!Array.isArray(b.criteria) || b.criteria.length < 1) return "criteria must be a non-empty array";
+  for (const [i, c] of b.criteria.entries()) {
+    if (typeof c !== "object" || c === null || Array.isArray(c)) return `criteria[${i}] must be an object`;
+    if (typeof c.id !== "string" || !c.id) return `criteria[${i}].id is required`;
+    if (!dimIds.has(c.dimension)) return `criteria[${i}].dimension must reference a dimension id`;
+    if (typeof c.prompt !== "string" || !c.prompt) return `criteria[${i}].prompt is required`;
+    if (typeof c.responseType !== "string" || !c.responseType) return `criteria[${i}].responseType is required`;
+    if (typeof c.weight !== "number" || c.weight < 0) return `criteria[${i}].weight must be a number >= 0`;
+  }
+  return null;
+}
+
+app.put("/v1/rubrics/:id", requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.role !== "admin") return res.status(403).json({ error: "forbidden" });
+    const ref = db.collection("rubrics").doc(req.params.id);
+    const cur = await ref.get();
+    if (!cur.exists) return res.status(404).json({ error: "not_found" });
+    const detail = rubricBodyError(req.body, req.params.id);
+    if (detail) return res.status(400).json({ error: "invalid_body", detail });
+    if (req.body.version === cur.get("version")) {
+      return res.status(409).json({ error: "version_conflict", detail: "version must change on any edit" });
+    }
+    const wr = await ref.set(req.body);
+    res.json({ id: req.params.id, version: req.body.version, updatedAt: wr.writeTime.toDate().toISOString() });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---------- MC2: minimal admin page (real dashboard is MC4) ----------
 
 app.get("/v1/client-config", (_req, res) => {

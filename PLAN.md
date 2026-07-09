@@ -220,12 +220,42 @@ Tier-2 sharing: scores + redacted evidence quotes, nothing else.
     rubricId, rubricVersion, summary, criteria}` (server-only access,
     same deny-all rules).
 
-## MC4 — Mentor dashboard v1 (cloud lane)              Status: IN PROGRESS
+## MC4 — Mentor dashboard v1 (cloud lane)   Status: BUILT 2026-07-08 (accept pending)
 Data feeds ready: roster (MC2) + sessions reads (MC3 cloud, ± uid filter).
-- [ ] Cohort view: trainees, session counts, per-dimension trend lines
-- [ ] Trainee drill-in: per-session scores + evidence quotes
-- [ ] Rubric editor for the director (writes MC1 store, versioned)
-- **Accept:** the director completes a real trainee review using only the web.
+- [x] Cohort view: trainees, session counts, last-shared, overall trend
+      sparkline per member — live on dev + prod at `/admin`
+- [x] Trainee drill-in: per-dimension trend sparklines + per-session cards
+      (summary, criteria grouped by dimension with met/partial/missed/na
+      badges, evidence quotes, tips; prompts joined from the rubric)
+- [x] Rubric editor: name/version/dimension-labels/prompt/what-good-looks-
+      like/weight fields + raw-JSON advanced mode; enforces version bump
+      (409 on unchanged); all PUT paths verified on dev (409/400/403/200,
+      public read reflects edits immediately; test edit reverted via seeder)
+- **Accept:** the director completes a real trainee review using only the
+  web. (Pending — needs Bilal/director click-through on real data.)
+- Session scoring shown on the web: met=1, partial=0.5, missed=0, na
+  excluded; dimension score = mean over its criteria, overall = mean of
+  dimension scores. (Display-only convention — phones own real scoring.)
+- **Interface (SETTLED 2026-07-08):**
+  - Dashboard = vanilla-JS static SPA served by the API container at
+    `/admin` (no framework — see decisions log). Views: cohort table
+    (session counts, last shared, trend sparkline) → trainee drill-in
+    (per-dimension trends; sessions with per-criterion results, evidence
+    quotes, tips; dimension labels joined from the rubric) → rubric editor.
+  - `PUT /v1/rubrics/:id` (Bearer; role=admin — NEW, dashboard-only) body =
+    the full rubric document (same shape as MC1's `rubric` field).
+    Rules: `body.id` must equal `:id` · `version` must DIFFER from the
+    stored version (else 409 `{"error":"version_conflict"}`) · structural
+    validation (name, dimensions with id/label, criteria with
+    id/dimension/prompt/responseType/weight, every criterion.dimension
+    references a dimension id) → 400 `invalid_body` + detail ·
+    unknown rubric → 404 `not_found`.
+    → 200 `{ "id", "version", "updatedAt" }`. Phones pick edits up via MC1
+    semantics (updatedAt/version change); scoring math is per-session
+    versioned, so old sessions stay tied to the version they were scored
+    against.
+  - Rubric store stays GLOBAL (not org-scoped) in v1 — acceptable while
+    org #1 is the only design partner; revisit at second institution.
 
 ## MC5 — Hardening                                     Status: NOT STARTED
 - [ ] Rate limiting on the API; audit logging
@@ -259,6 +289,10 @@ Data feeds ready: roster (MC2) + sessions reads (MC3 cloud, ± uid filter).
 - 2026-07-08 **Dedicated gcloud config `medadvisor`** on the mini (the machine
   also serves bithunch/offloadai). Selected per-command via
   `CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor`, never activated globally.
+- 2026-07-08 **Dashboard framework: none (v1).** Vanilla ES modules + the
+  Firebase Auth CDN module, served as static files from the API container at
+  `/admin`. Smallest thing that ships; zero build step; bundle stays tiny per
+  the stack rules. Revisit (and use `dashboard/`) if scope outgrows it.
 - 2026-07-08 **AMENDS "tenants = orgs": project-level accounts.** IdP accounts
   can never move into a tenant after creation, which breaks "login optional,
   join program later via code". So: one project-level auth realm; org
