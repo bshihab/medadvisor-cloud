@@ -114,9 +114,9 @@ amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
   credential → `signIn(with:)`), and — AMENDED 2026-07-08 — **Google**.
 
   **Google sign-in (added 2026-07-08; iOS-lane contract):**
-  STATUS: dev SETTLED & VERIFIED 2026-07-08 (provider enabled, web client
-  auto-set, iOS client provisioned) — the iOS chat can build and test
-  against dev now. Prod = same console toggle, pending Bilal.
+  STATUS: SETTLED & VERIFIED on BOTH envs (dev 2026-07-08, prod
+  2026-07-09) — providers enabled, web clients auto-set, iOS clients
+  provisioned. iOS chat: drop the prod IDs into the release config.
   - iOS flow: GoogleSignIn SDK natively → `GIDSignIn.sharedInstance.signIn`
     → `GoogleAuthProvider.credential(withIDToken:accessToken:)` →
     `auth.signIn(with:)`. Same project-level account pool as the other
@@ -126,9 +126,12 @@ amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
       `743594385075-k98bthp09fubpvsk54ni65ji8ic5ia1j.apps.googleusercontent.com`
     - dev REVERSED_CLIENT_ID (register as URL scheme):
       `com.googleusercontent.apps.743594385075-k98bthp09fubpvsk54ni65ji8ic5ia1j`
-    - prod: `⏳ pending the same console toggle on medadvisor-production`
+    - prod CLIENT_ID:
+      `597896295002-fsm8d0j9tsqjmsh5i2pq4gttio9psen5.apps.googleusercontent.com`
+    - prod REVERSED_CLIENT_ID (URL scheme, release config):
+      `com.googleusercontent.apps.597896295002-fsm8d0j9tsqjmsh5i2pq4gttio9psen5`
     They land in the refreshed `GoogleService-Info.plist` per env (re-pull
-    it — dev plist now carries them).
+    both — each plist now carries its pair).
   - **Account linking (verified in IdP config, both envs):**
     `signIn.allowDuplicateEmails = false` → **one account per email**.
     Google sign-in with an email that already has a password/Apple account
@@ -348,7 +351,7 @@ vanilla JS, no framework (polish ≠ rewrite; framework decision stands).
 - [x] Wording: "Mentor"/"Trainee" in all user-facing text
 - **Accept:** Bilal puts dashboard and app side by side and calls them the
   same family; no view renders blank on empty org or slow network.
-  (Pending Bilal's eyeball; deployed to dev only, prod held.)
+  (Pending Bilal's eyeball; live on dev + prod as of 2026-07-09.)
 - [x] **Unified skill-area visualization** (SETTLED 2026-07-09): dashboard
       drill-in mirrors the iOS spec exactly (see spec section at bottom):
       one row per skill area — label · capsule bar (10px, faint neutral
@@ -362,7 +365,7 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
 - CLOUD: [x] notes model + endpoints — LIVE ON DEV, verified: CRUD, newest-
       first reads, unknown-key/membership/session-ownership validation,
       author-only edit/delete (403), re-delete 404, trainee POST 403.
-      Prod held for Bilal's go-ahead.
+      Prod: deployed + smoke-tested 2026-07-09.
 - CLOUD: [x] `DELETE /v1/sessions/:clientSessionId` — LIVE ON DEV, verified:
       owner delete 200, re-delete 404, foreign clientSessionId 404 (own-
       namespace resolution), vanishes from reads, attached note cascaded.
@@ -386,7 +389,7 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
 - CLOUD: [x] retraction markers — LIVE ON DEV, verified: marker is exactly
       the 4 contentless fields (planted "secret" summary/quote provably
       unrecoverable), same-batch atomicity both directions (delete→marker,
-      re-share→marker cleared), trainee reads 403. Prod held.
+      re-share→marker cleared), trainee reads 403. Prod: deployed + smoke-tested 2026-07-09.
 - CLOUD: [x] `GET /v1/orgs/:orgId/invites` — live on dev (active+unexpired
       only, newest first, audited)
 - DASH:  [x] retraction lines in the drill-in timeline (muted italic line,
@@ -504,7 +507,7 @@ fallback (MC6 semantics unchanged).
       note create returns 200 with a registered token while delivery is
       impossible (logged `messaging/mismatched-credential`); flips to real
       delivery once the APNs key + IAM grant land. Unregistered-token
-      cleanup wired. Prod held for the go-ahead batch.
+      cleanup wired. Prod: deployed 2026-07-09 (auth gate smoke-tested).
 - iOS:   [ ] permission prompt in context; register FCM token against
       POST /v1/me/push-token; clear on sign-out; tap → deep-link to note
 - **Accept:** mentor writes a note on the web → trainee's phone shows a
