@@ -224,7 +224,7 @@ Tier-2 sharing: scores + redacted evidence quotes, nothing else.
     rubricId, rubricVersion, summary, criteria}` (server-only access,
     same deny-all rules).
 
-## MC4 — Mentor dashboard v1 (cloud lane)   Status: BUILT 2026-07-08 (accept pending)
+## MC4 — Mentor dashboard v1 (cloud lane)              Status: DONE 2026-07-08
 Data feeds ready: roster (MC2) + sessions reads (MC3 cloud, ± uid filter).
 - [x] Cohort view: trainees, session counts, last-shared, overall trend
       sparkline per member — live on dev + prod at `/admin`
@@ -235,8 +235,10 @@ Data feeds ready: roster (MC2) + sessions reads (MC3 cloud, ± uid filter).
       like/weight fields + raw-JSON advanced mode; enforces version bump
       (409 on unchanged); all PUT paths verified on dev (409/400/403/200,
       public read reflects edits immediately; test edit reverted via seeder)
-- **Accept:** the director completes a real trainee review using only the
-  web. (Pending — needs Bilal/director click-through on real data.)
+- **Accept:** ✅ passed 2026-07-08 — Bilal (as director stand-in) reviewed his
+  real shared session end-to-end on the web (cohort → drill-in → rubric
+  editor). Re-run formally with the actual program director on prod data at
+  cohort onboarding.
 - Session scoring shown on the web: met=1, partial=0.5, missed=0, na
   excluded; dimension score = mean over its criteria, overall = mean of
   dimension scores. (Display-only convention — phones own real scoring.)
