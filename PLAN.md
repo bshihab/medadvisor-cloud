@@ -162,10 +162,14 @@ amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
 
 ## MC3 — Sync with the review gate (iOS lane)          Status: IN PROGRESS
 Tier-2 sharing: scores + redacted evidence quotes, nothing else.
-- iOS:   [ ] Second-pass rule-based NER redaction (NLTagger + regex) over quotes
-- iOS:   [ ] "Share with mentor" review screen: trainee sees EXACT payload,
-      edits/removes quotes, confirms → upload (org-scoped)
-- iOS:   [ ] Cross-device restore of own history when logged in
+- iOS:   [x] Second-pass rule-based NER redaction (NLTagger + regex) over quotes
+      — VERIFIED on device 2026-07-09: planted patient name in a recording
+      surfaced as [NAME] at the review gate
+- iOS:   [x] "Share with mentor" review screen: trainee sees EXACT payload,
+      edits/removes quotes, confirms → upload (org-scoped) — share verified
+      against dev end-to-end
+- iOS:   [ ] Cross-device restore of own history when logged in — built
+      (GET /v1/me/sessions merge on sign-in), device test pending
 - CLOUD: [x] `POST /v1/sessions` + reads (below) — LIVE ON DEV, full contract
       verified (idempotent replace, transcript-key rejection at both levels,
       enum/limit validation, restore read, org read ± uid filter, 401/403).
