@@ -322,11 +322,12 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
       refresh → roster read 200. Mentor joining works exactly like trainee.
 - DASH:  [ ] notes UI in drill-in: write/edit/delete a note on a session and
       on the trainee generally
-- iOS:   [ ] mentor-notes display + unread badge (consumes notes reads)
-- iOS:   [ ] delete-everywhere flow (consumes DELETE + local tombstones so
-      restore doesn't resurrect device-only deletes)
-- iOS:   [ ] native read-only mentor view driven by `/v1/me` role (consumes
-      EXISTING org/sessions reads)
+- iOS:   [x] mentor-notes display + unread badge (consumes notes reads) —
+      BUILT (Progress card + list, local last-seen badge); device test pending
+- iOS:   [x] delete-everywhere flow — BUILT (shared dialog: device-only w/
+      tombstone vs everywhere, cloud-first); device test pending
+- iOS:   [x] native read-only mentor view driven by `/v1/me` role — BUILT
+      (Account -> My cohort -> trainee sessions); device test pending
 - **Accept:** mentor writes one session note + one general note on the web →
   trainee's phone shows both via pull with an unread badge; trainee deletes a
   shared session → it vanishes from the dashboard and its notes cascade away;
