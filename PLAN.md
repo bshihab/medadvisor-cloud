@@ -376,9 +376,43 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
   shared session → it vanishes from the dashboard and its notes cascade away;
   a fresh account redeeming a mentor code becomes a Mentor who sees the
   roster.
+- CLOUD: [ ] retraction markers (contract below; relayed brief 2026-07-08)
+- CLOUD: [ ] `GET /v1/orgs/:orgId/invites` for the make-key UI (below)
+- DASH:  [ ] retraction lines in the drill-in timeline (muted, no card, no
+      counts/trends impact)
+- DASH:  [ ] make-key UI: "New invite code" button + active-codes list +
+      clearly-labeled Mentor-code option
 - **Compatibility note for the iOS lane:** `GET /v1/me/sessions` and
-  `GET /v1/orgs/:orgId/sessions` item shapes are UNCHANGED by MC6. Notes are
+  `GET /v1/orgs/:orgId/sessions` item shapes are UNCHANGED by MC6 (including
+  by retraction markers — those are a separate admin-only read). Notes are
   a separate resource — join client-side via `sessionId`.
+- **Interface: retraction markers (SETTLED 2026-07-08):**
+  - On successful `DELETE /v1/sessions/:clientSessionId` the server writes,
+    in the same atomic batch as the deletion, a CONTENTLESS marker:
+    `{ traineeUid, recordedAt, receivedAt, retractedAt }` — the session's
+    own recordedAt/receivedAt plus the retraction time. No scores, quotes,
+    summary, location, or note content — nothing rereadable survives.
+  - Re-POSTing the same `clientSessionId` (trainee re-shares) DELETES the
+    marker in the same batch as the upsert — latest intent wins; the
+    timeline never shows both a session and its retraction.
+  - `GET /v1/orgs/:orgId/retractions?uid=&limit=` (Mentor of that org) →
+    `{ "retractions": [ { "traineeUid", "recordedAt", "receivedAt",
+    "retractedAt" } ], "count" }`, newest retraction first. That is the
+    ENTIRE item — deliberately nothing else.
+  - Trainee-facing surfaces: nothing. No trainee endpoint exposes markers.
+  - Dashboard renders a muted timeline line — "A session from ‹recordedAt›
+    was retracted by the trainee on ‹retractedAt›" — no card, no drill-in,
+    excluded from session counts and trend math.
+  - Firestore: `orgs/{orgId}/retractions/{sessionId}` (doc id reused for
+    idempotency/un-retract; never exposed in responses).
+- **Interface: invite-code listing for the make-key UI (SETTLED 2026-07-08):**
+  - `GET /v1/orgs/:orgId/invites` (Mentor of that org) →
+    `{ "invites": [ { "code", "role", "uses", "maxUses", "createdAt",
+    "expiresAt" } ], "count" }` — active, unexpired codes only, newest
+    first. Minting stays `POST /v1/orgs/:orgId/invites` (MC2, unchanged).
+  - Dashboard: "Invite codes" card — active list + "New invite code" with
+    a role picker where the Mentor option is explicitly labeled as granting
+    full program access. Wire roles stay `trainee`/`admin`.
 - **Interface (SETTLED 2026-07-08 — iOS chat can build against this):**
 
   **Mentor notes.** A note is attached to a trainee generally
@@ -486,3 +520,11 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
   trainees often live in institutional Google accounts). Apple button keeps
   ≥ equal prominence per App Review 4.8. Same-email sign-ins link to one
   account, so no membership migration is needed.
+- 2026-07-08 **Retraction markers (settled with the iOS chat).** "Delete
+  everywhere" remains TRUE deletion — a mentor-visible "deleted" archive or
+  mentor-restore was explicitly REJECTED as a trust break. Instead the
+  server writes a contentless marker (traineeUid + the session's recordedAt/
+  receivedAt + retractedAt — nothing rereadable) so the mentor timeline can
+  say a session was retracted without preserving any of its content.
+  Re-sharing the same clientSessionId clears the marker (latest trainee
+  intent wins).
