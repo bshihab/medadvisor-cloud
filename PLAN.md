@@ -539,6 +539,67 @@ fallback (MC6 semantics unchanged).
   - Firestore: `users/{uid}/pushTokens/{token}` `{ platform, lastSeenAt }`
     (server-only access; deny-all rules unchanged).
 
+## MC8 — Per-criterion feedback, threads, person-first dashboard  Status: IN PROGRESS
+Joint milestone. Notes gain per-criterion anchoring + threaded replies;
+dashboard rebuilt person-first on React (decision logged — amends
+"no framework"). A-fixes ship on the current dashboard immediately; the
+rebuild carries the MC8 UIs so nothing is built twice.
+- DASH:  [ ] A-fixes (current SPA, ship now): session cards show date+time;
+      per-session headline becomes "X of Y met" (met / applicable, N/A
+      excluded — skill bars keep the unified spec); skill rows expand into
+      a clickable detail chart (per-session points → jump to that
+      session); invite section rewritten in plain words with mint action
+      separated from the active-code list.
+- CLOUD: [ ] per-criterion notes: optional `criterionId` (contract below)
+- CLOUD: [ ] threaded replies + reply push (contract below)
+- DASH:  [ ] React rebuild: Vite + Tailwind + shadcn/ui + Recharts;
+      person-first IA (pick a person → summary/progress | sessions &
+      conversations); carries criterion-comment affordance + thread view.
+      Same Express container serves the built bundle; code-split.
+- iOS:   [ ] criterion comments inline in the rubric view; reply UI —
+      consumes the contracts below.
+- **Accept:** mentor comments on one criterion on the web → trainee sees it
+  anchored to that criterion in-app, replies → mentor gets the reply and
+  answers → the thread reads chronologically on both surfaces; Bilal
+  navigates the rebuilt dashboard person-first and calls it the same mental
+  model as the app.
+- **Interface (SETTLED 2026-07-09 — iOS chat builds against this; both
+  changes to the note item are ADDITIVE):**
+
+  **Per-criterion notes.** `POST /v1/orgs/:orgId/notes` gains optional
+  `"criterionId"`: only valid together with `sessionId`, and it must match
+  a `criteria[].id` present in THAT session (else 400 `invalid_body` +
+  detail). Note items in every read now carry `"criterionId": string|null`.
+  General notes (no sessionId) and session-level notes (sessionId, no
+  criterionId) behave exactly as before.
+
+  **Threaded replies.** Single-level threads: replies attach to a ROOT
+  note only (replying to a reply is a 400 — thread stays flat and
+  chronological). Note items in every read gain
+  `"replies": [ <reply items, createdAt ascending> ]`.
+  Reply item: `{ "replyId", "parentNoteId", "authorUid", "authorEmail",
+  "authorDisplayName", "authorRole": "admin"|"trainee", "text",
+  "createdAt", "updatedAt" }` (UI renders authorRole as Mentor/Trainee).
+  - `POST /v1/orgs/:orgId/notes/:noteId/replies` body `{ "text" }`
+    (1–4000 chars, unknown keys rejected) → 200 reply item.
+    WHO MAY: a Mentor of that org, or the trainee the root note is
+    addressed to (`root.traineeUid == caller`) — no one else (403).
+  - `PATCH /v1/orgs/:orgId/notes/:noteId/replies/:replyId` `{ "text" }` —
+    author-only (others 403), unknown 404.
+  - `DELETE …/replies/:replyId` — author-only, idempotency like notes
+    (repeat → 404). Deleting a ROOT note cascades its replies; the
+    session-delete cascade takes whole threads with it.
+  - No new read endpoints: replies ride inside note items on
+    `GET /v1/me/notes` and `GET /v1/orgs/:orgId/notes` (limits apply to
+    root notes; their replies always ride along).
+  - Push (MC7 sender + registry reused, same best-effort guarantees):
+    mentor replies → push to the trainee ("Your mentor replied", preview,
+    data `{noteId, replyId, orgId}`); trainee replies → push to the root
+    note's author ("New reply from your trainee", same data shape).
+  - Firestore: same `orgs/{orgId}/notes/*` collection; replies carry
+    `parentNoteId` and INHERIT `traineeUid`/`sessionId`/`criterionId` from
+    the root, so every existing filtered read returns whole threads.
+
 ---
 
 ## Unified skill-area visualization spec (SETTLED 2026-07-09 — mirrored in
@@ -609,6 +670,16 @@ Insights, native mentor Cohort tab — both shipped — and the web dashboard):
   trainees often live in institutional Google accounts). Apple button keeps
   ≥ equal prominence per App Review 4.8. Same-email sign-ins link to one
   account, so no membership migration is needed.
+- 2026-07-09 **MC8: person-first dashboard on React (AMENDS "dashboard
+  framework: none").** The vanilla SPA served MC4 well but the surface
+  outgrew it (threads, per-criterion feedback, detail charts). Rebuild on
+  React + Vite + Tailwind + shadcn/ui + Recharts, IA reorganized around the
+  app's mental model: pick a person → their summary or their sessions/
+  conversations. Architecture unchanged: Vite emits a static, code-split
+  bundle served by the same Express container on Cloud Run (honors the
+  "deploy prebuilt bundles" + "small browser bundle" decisions). Same API,
+  same auth, no infra change. A-fixes ship on the vanilla SPA first; the
+  rebuild carries the MC8 UIs.
 - 2026-07-08 **Retraction markers (settled with the iOS chat).** "Delete
   everywhere" remains TRUE deletion — a mentor-visible "deleted" archive or
   mentor-restore was explicitly REJECTED as a trust break. Instead the
