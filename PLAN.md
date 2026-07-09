@@ -276,8 +276,8 @@ Full control-by-control status: `infra/security-checklist.md`.
 - [ ] BLOCKED on Bilal approval (commands ready in checklist): least-priv
       runtime service account (dev+prod), API-key restrictions,
       Firestore data-access audit logs on prod, prod deploy of this build.
-- [ ] Google BAA — Bilal console action (steps in checklist). REQUIRED
-      before real-patient-derived data on prod.
+- [x] Google BAA — ✅ accepted 2026-07-08 by Bilal (covers the account;
+      PHI only in covered services — see checklist).
 - [ ] Custom domains: dashboard + R2 bucket — needs domain name +
       Cloudflare access from Bilal.
 - [ ] Staging environment — PROPOSED: defer to pre-GA (see checklist ⏸;

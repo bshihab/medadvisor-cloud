@@ -74,10 +74,11 @@ before any real-patient use.
   demonstrable on real spend.)
 - ✅ Monitoring: uptime checks on /health every 5 min (dev + prod) with
   email alert policies ("medadvisor-api /health DOWN") to shihabbilal@gmail.com.
-- 👤 **Google BAA** — REQUIRED before any real-patient-derived data on prod:
-  Cloud Console → burger menu → "Compliance" (or IAM & Admin → Legal &
-  Compliance) → HIPAA BAA → review and accept for the billing account /
-  both projects, signed in as shihabbilal@gmail.com.
+- ✅ **Google BAA accepted 2026-07-08** by Bilal (shihabbilal@gmail.com) via
+  console.cloud.google.com/iam-admin/privacy in medadvisor-production;
+  acceptance covers the account's projects. Reminder: PHI only in covered
+  services (Cloud Run, Firestore, Identity Platform all are); re-check the
+  covered list before adding any new Google service.
 - 👤 Custom domains (dashboard + Cloudflare R2 model bucket) — needs the
   domain name + Cloudflare account; r2.dev URL is dev-mode only.
 - ⏸ Staging environment — proposed: defer until pre-GA (CLAUDE.md stack
