@@ -293,20 +293,22 @@ Full control-by-control status: `infra/security-checklist.md`.
   and confirmed on both services. (Budget alert *email* still pending a
   real threshold crossing — noted in MC0.)
 
-## MC4.5 — Dashboard redesign (cloud lane)             Status: NOT STARTED
+## MC4.5 — Dashboard redesign (cloud lane)   Status: BUILT 2026-07-08 (accept pending)
 Real login screen + full visual pass to match the iOS app's feel. Still
 vanilla JS, no framework (polish ≠ rewrite; framework decision stands).
-- [ ] Login screen: its own page state (not the bare form) — centered card,
-      product identity, blue/indigo/purple ambient palette, friendly errors
-      ("Wrong password" not `auth/invalid-credential`)
-- [ ] Visual pass on all views: rounded cards, generous spacing, ambient
-      gradient background, consistent type scale
-- [ ] Proper loading / empty / error states for every view (cohort,
-      drill-in, rubrics, editor, notes)
-- [ ] Wording: "Mentor"/"Trainee" everywhere user-facing (server keeps
-      admin/trainee internally — see decisions log)
+- [x] Login screen: centered brand card, blue/indigo/purple ambient
+      gradient, friendly error mapping, busy state on the button
+- [x] Visual pass on all views: rounded cards, soft shadows, gradient
+      accents, pill tabs, light+dark themes
+- [x] Loading / empty / error states: boot spinner, per-view loading,
+      empty-cohort/empty-sessions/no-notes states, load-failure view with
+      retry; verified in a headless browser (incl. a caught-and-fixed bug:
+      author CSS was overriding the `hidden` attribute, leaving the login
+      card visible after sign-in)
+- [x] Wording: "Mentor"/"Trainee" in all user-facing text
 - **Accept:** Bilal puts dashboard and app side by side and calls them the
   same family; no view renders blank on empty org or slow network.
+  (Pending Bilal's eyeball; deployed to dev only, prod held.)
 
 ## MC6 — Mentor notes, session delete, mentor invites  Status: IN PROGRESS
 Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
@@ -320,8 +322,9 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
 - CLOUD: [x] `role: admin` codes verified end-to-end on dev 2026-07-08:
       mint (maxUses 1) → fresh signup → redeem → claims `admin` after token
       refresh → roster read 200. Mentor joining works exactly like trainee.
-- DASH:  [ ] notes UI in drill-in: write/edit/delete a note on a session and
-      on the trainee generally
+- DASH:  [x] notes UI in drill-in (general + per-session composers, author-
+      only edit/delete with two-step confirm) — verified live in a headless
+      browser: add + delete round-tripped through the API. Dev only so far.
 - iOS:   [x] mentor-notes display + unread badge (consumes notes reads) —
       BUILT (Progress card + list, local last-seen badge); device test pending
 - iOS:   [x] delete-everywhere flow — BUILT (shared dialog: device-only w/

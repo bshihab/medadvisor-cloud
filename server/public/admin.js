@@ -1,5 +1,5 @@
-// MedAdvisor mentor dashboard (MC4 v1). Vanilla ES modules, no build step.
-// Data: /v1/me, /v1/orgs/:id/members, /v1/orgs/:id/sessions, /v1/rubrics (+PUT).
+// MedAdvisor mentor dashboard (MC4.5 redesign + MC6 notes). Vanilla ES
+// modules, no build step. Wire roles are admin/trainee; UI says Mentor/Trainee.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
@@ -8,11 +8,15 @@ import {
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const roleLabel = (r) => (r === "admin" ? "Mentor" : "Trainee");
+const roleBadge = (r) =>
+  `<span class="badge ${r === "admin" ? "mentor" : "trainee"}">${roleLabel(r)}</span>`;
+const fmtDay = (iso) => (iso ? iso.slice(0, 10) : "—");
 
 const cfg = await fetch("/v1/client-config").then((r) => r.json());
 const auth = getAuth(initializeApp(cfg));
 
-const state = { me: null, members: [], sessions: [], rubrics: [] };
+const state = { me: null, members: [], sessions: [], notes: [], rubrics: [], editingNoteId: null };
 
 async function api(path, opts = {}) {
   const token = await auth.currentUser.getIdToken();
@@ -21,11 +25,11 @@ async function api(path, opts = {}) {
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...(opts.headers ?? {}) },
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(body.detail ?? body.error ?? res.status), { body, status: res.status });
+  if (!res.ok) throw Object.assign(new Error(body.detail ?? body.error ?? `HTTP ${res.status}`), { body, status: res.status });
   return body;
 }
 
-// ---------- scoring ----------
+// ---------- scoring / sparklines ----------
 const RESULT_SCORE = { met: 1, partial: 0.5, missed: 0 };
 
 function dimensionScores(session) {
@@ -36,8 +40,8 @@ function dimensionScores(session) {
   }
   return Object.fromEntries(Object.entries(per).map(([d, arr]) => [d, arr.reduce((a, b) => a + b, 0) / arr.length]));
 }
-const overallScore = (session) => {
-  const v = Object.values(dimensionScores(session));
+const overallScore = (s) => {
+  const v = Object.values(dimensionScores(s));
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
 };
 const pct = (x) => (x == null ? "—" : `${Math.round(x * 100)}%`);
@@ -49,50 +53,108 @@ function spark(values, w = 110, h = 26) {
   const step = (w - 6) / (pts.length - 1);
   const line = pts.map((v, i) => `${(3 + i * step).toFixed(1)},${(h - 3 - v * (h - 6)).toFixed(1)}`).join(" ");
   return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-    <polyline points="${line}" fill="none" stroke="#1a73e8" stroke-width="2"/>
-    <circle cx="${(3 + (pts.length - 1) * step).toFixed(1)}" cy="${(h - 3 - pts.at(-1) * (h - 6)).toFixed(1)}" r="2.6" fill="#1a73e8"/>
+    <polyline points="${line}" fill="none" stroke="var(--indigo)" stroke-width="2"/>
+    <circle cx="${(3 + (pts.length - 1) * step).toFixed(1)}" cy="${(h - 3 - pts.at(-1) * (h - 6)).toFixed(1)}" r="2.6" fill="var(--purple)"/>
   </svg>`;
 }
 
 // ---------- data ----------
 async function loadAll() {
   const me = await api("/v1/me");
-  if (!me.org || me.org.role !== "admin") throw new Error("This account is not an org admin.");
+  if (!me.org || me.org.role !== "admin") throw new Error("This account is not a Mentor of any program.");
   state.me = me;
-  const [members, sessions, rubrics] = await Promise.all([
-    api(`/v1/orgs/${me.org.orgId}/members`),
-    api(`/v1/orgs/${me.org.orgId}/sessions?limit=500`),
+  const org = me.org.orgId;
+  const [members, sessions, notes, rubrics] = await Promise.all([
+    api(`/v1/orgs/${org}/members`),
+    api(`/v1/orgs/${org}/sessions?limit=500`),
+    api(`/v1/orgs/${org}/notes?limit=500`),
     fetch("/v1/rubrics").then((r) => r.json()),
   ]);
   state.members = members.members;
   state.sessions = sessions.sessions;
+  state.notes = notes.notes;
   state.rubrics = rubrics.rubrics;
+}
+
+async function refreshNotes() {
+  const r = await api(`/v1/orgs/${state.me.org.orgId}/notes?limit=500`);
+  state.notes = r.notes;
 }
 
 const sessionsOf = (uid) =>
   state.sessions.filter((s) => s.uid === uid).sort((a, b) => (a.recordedAt ?? "").localeCompare(b.recordedAt ?? ""));
+const notesFor = (uid, sessionId) =>
+  state.notes.filter((n) => n.traineeUid === uid && (n.sessionId ?? null) === sessionId);
 const rubricDoc = (id) => state.rubrics.find((r) => r.id === id)?.rubric;
 const memberName = (m) => m.displayName || m.email || m.uid;
 
+// ---------- shared fragments ----------
+const stateBox = (icon, title, sub = "") =>
+  `<div class="card"><div class="state"><div class="big">${icon}</div>
+   <h3>${esc(title)}</h3><p class="muted">${sub}</p></div></div>`;
+
+function noteHtml(n) {
+  const mine = n.authorUid === state.me.uid;
+  const when = fmtDay(n.createdAt) + (n.updatedAt !== n.createdAt ? " · edited" : "");
+  if (state.editingNoteId === n.noteId) {
+    return `<div class="note" data-note="${esc(n.noteId)}">
+      <div class="meta">${esc(n.authorEmail ?? "Mentor")} · ${when}</div>
+      <div class="composer">
+        <textarea id="edit-ta-${esc(n.noteId)}">${esc(n.text)}</textarea>
+        <div class="row">
+          <button class="primary small" data-action="save-edit" data-id="${esc(n.noteId)}">Save</button>
+          <button class="small" data-action="cancel-edit">Cancel</button>
+          <span class="err"></span>
+        </div>
+      </div>
+    </div>`;
+  }
+  return `<div class="note" data-note="${esc(n.noteId)}">
+    <div class="meta">${esc(n.authorEmail ?? "Mentor")} · ${when}
+      ${mine ? `· <button class="small" data-action="edit-note" data-id="${esc(n.noteId)}">Edit</button>
+               <button class="small danger" data-action="del-note" data-id="${esc(n.noteId)}">Delete</button>` : ""}
+    </div>
+    <div>${esc(n.text)}</div>
+  </div>`;
+}
+
+function notesBlock(uid, sessionId, title) {
+  const items = notesFor(uid, sessionId);
+  const ctx = sessionId ?? "general";
+  return `<h3 style="font-size:1rem">${esc(title)}</h3>
+    ${items.map(noteHtml).join("") || '<p class="muted">No notes yet.</p>'}
+    <div class="composer">
+      <textarea id="ta-${esc(ctx)}" placeholder="Write a note for the trainee…"></textarea>
+      <div class="row">
+        <button class="primary small" data-action="add-note" data-uid="${esc(uid)}"
+          data-session="${esc(sessionId ?? "")}" data-ctx="${esc(ctx)}">Add note</button>
+        <span class="err"></span>
+      </div>
+    </div>`;
+}
+
 // ---------- views ----------
 function viewCohort() {
+  if (state.members.length === 0)
+    return stateBox("👋", "No members yet",
+      "Share a trainee invite code from your program to get people on board.");
   const rows = state.members.map((m) => {
     const ss = sessionsOf(m.uid);
-    const last = ss.at(-1)?.recordedAt?.slice(0, 10) ?? "—";
     return `<tr class="click" onclick="location.hash='#trainee/${esc(m.uid)}'">
       <td>${esc(memberName(m))}</td>
-      <td><span class="badge role">${esc(m.role)}</span></td>
-      <td>${ss.length}</td><td>${last}</td>
+      <td>${roleBadge(m.role)}</td>
+      <td>${ss.length}</td><td>${fmtDay(ss.at(-1)?.recordedAt)}</td>
       <td>${spark(ss.map(overallScore))}</td></tr>`;
   }).join("");
-  return `<h2>${esc(state.me.org.name)} — cohort</h2>
+  return `<div class="card"><h2>${esc(state.me.org.name)}</h2>
+    <p class="muted">Tap a member to see their sessions and notes.</p>
     <table><thead><tr><th>Member</th><th>Role</th><th>Sessions</th><th>Last shared</th><th>Trend</th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="5" class="muted">no members yet</td></tr>'}</tbody></table>`;
+    <tbody>${rows}</tbody></table></div>`;
 }
 
 function viewTrainee(uid) {
   const m = state.members.find((x) => x.uid === uid);
-  if (!m) return '<p>Unknown member. <a href="#cohort">Back</a></p>';
+  if (!m) return stateBox("🤔", "Unknown member", '<a href="#cohort">Back to cohort</a>');
   const ss = sessionsOf(uid);
   const latestRubric = ss.length ? rubricDoc(ss.at(-1).rubricId) : null;
   const dims = latestRubric?.dimensions ?? [];
@@ -119,48 +181,59 @@ function viewTrainee(uid) {
         </div>`).join("")}
       </div>`).join("");
     return `<div class="card">
-      <div><strong>${esc(s.recordedAt?.slice(0, 10) ?? "?")}</strong>
+      <div><strong>${fmtDay(s.recordedAt)}</strong>
         <span class="muted">· ${esc(s.location ?? "")} · ${esc(s.rubricId)} v${esc(s.rubricVersion)}
         · overall ${pct(overallScore(s))}</span></div>
       ${s.summary ? `<p>${esc(s.summary)}</p>` : ""}
-      <details><summary class="muted">criteria (${s.criteria.length})</summary>${groups}</details>
+      <details><summary class="muted">Criteria (${s.criteria.length})</summary>${groups}</details>
+      <div style="margin-top:.6rem">${notesBlock(uid, s.sessionId, "Session notes")}</div>
     </div>`;
   }).join("");
 
-  return `<p><a href="#cohort">← cohort</a></p>
-    <h2>${esc(memberName(m))} <span class="badge role">${esc(m.role)}</span></h2>
-    <div class="dimrow">${trendCells || '<span class="muted">no sessions yet</span>'}</div>
-    ${cards || '<p class="muted">No shared sessions.</p>'}`;
+  return `<p><a href="#cohort">← Cohort</a></p>
+    <div class="card">
+      <h2>${esc(memberName(m))} ${roleBadge(m.role)}</h2>
+      ${ss.length ? `<div class="dimrow" style="margin-top:.6rem">${trendCells}</div>`
+                  : '<p class="muted">No shared sessions yet — trends appear once the trainee shares.</p>'}
+    </div>
+    <div class="card">${notesBlock(uid, null, "General notes")}</div>
+    ${cards || stateBox("📭", "No shared sessions",
+      "Sessions appear here as soon as the trainee shares them from the app.")}`;
 }
 
 function viewRubrics() {
+  if (state.rubrics.length === 0)
+    return stateBox("📋", "No rubrics", "Seed rubrics from the repo to get started.");
   const rows = state.rubrics.map((r) => `<tr class="click" onclick="location.hash='#rubric/${esc(r.id)}'">
     <td>${esc(r.rubric.name)}</td><td>${esc(r.id)}</td><td>${esc(r.version)}</td>
-    <td>${esc(r.updatedAt?.slice(0, 10))}</td><td>${r.rubric.criteria.length}</td></tr>`).join("");
-  return `<h2>Rubrics <span class="muted">(edits reach phones on their next fetch)</span></h2>
+    <td>${fmtDay(r.updatedAt)}</td><td>${r.rubric.criteria.length}</td></tr>`).join("");
+  return `<div class="card"><h2>Rubrics</h2>
+    <p class="muted">Edits reach trainees' phones on their next fetch.</p>
     <table><thead><tr><th>Name</th><th>id</th><th>Version</th><th>Updated</th><th>Criteria</th></tr></thead>
-    <tbody>${rows}</tbody></table>`;
+    <tbody>${rows}</tbody></table></div>`;
 }
 
 function viewRubricEditor(id) {
   const item = state.rubrics.find((r) => r.id === id);
-  if (!item) return '<p>Unknown rubric. <a href="#rubrics">Back</a></p>';
+  if (!item) return stateBox("🤔", "Unknown rubric", '<a href="#rubrics">Back to rubrics</a>');
   const r = structuredClone(item.rubric);
   const dimFields = r.dimensions.map((d, i) => `
-    <label class="f">dimension “${esc(d.id)}” label
-      <input data-dim="${i}" value="${esc(d.label)}" style="width:100%"></label>`).join("");
+    <label class="f">Dimension “${esc(d.id)}” label
+      <input data-dim="${i}" value="${esc(d.label)}"></label>`).join("");
   const critFields = r.criteria.map((c, i) => `
     <div class="crit-edit">
       <div class="muted">${esc(c.id)} · ${esc(c.dimension)} · weight
         <input data-crit-weight="${i}" type="number" min="0" step="0.5" value="${c.weight}" style="width:5rem"></div>
-      <label class="f">prompt<textarea data-crit-prompt="${i}" rows="2">${esc(c.prompt)}</textarea></label>
-      <label class="f">what good looks like
+      <label class="f">Prompt<textarea data-crit-prompt="${i}" rows="2">${esc(c.prompt)}</textarea></label>
+      <label class="f">What good looks like
         <textarea data-crit-wgll="${i}" rows="2">${esc(c.whatGoodLooksLike ?? "")}</textarea></label>
     </div>`).join("");
 
   setTimeout(() => {
     $("save").onclick = async () => {
-      $("savemsg").textContent = ""; $("savemsg").className = "";
+      const msg = $("savemsg");
+      msg.textContent = "Saving…"; msg.className = "muted";
+      $("save").disabled = true;
       try {
         let updated;
         const rawEl = $("rawjson");
@@ -182,31 +255,83 @@ function viewRubricEditor(id) {
         const out = await api(`/v1/rubrics/${id}`, { method: "PUT", body: JSON.stringify(updated) });
         const fresh = await fetch("/v1/rubrics").then((x) => x.json());
         state.rubrics = fresh.rubrics;
-        $("savemsg").className = "ok";
-        $("savemsg").textContent = `Saved v${out.version} at ${out.updatedAt}. Phones see it on next fetch.`;
+        msg.className = "ok";
+        msg.textContent = `Saved v${out.version}. Phones see it on their next fetch.`;
       } catch (e) {
-        $("savemsg").textContent = `Save failed: ${e.message}`;
+        msg.className = "err";
+        msg.textContent = e.status === 409
+          ? "Version must change on any edit — bump it and save again."
+          : `Save failed: ${e.message}`;
+      } finally {
+        $("save").disabled = false;
       }
     };
     $("rawjson").addEventListener("input", (e) => { e.target.dataset.touched = "1"; });
   });
 
-  return `<p><a href="#rubrics">← rubrics</a></p>
-    <h2>Edit: ${esc(r.name)}</h2>
-    <label class="f">name<input id="rname" value="${esc(r.name)}" style="width:100%"></label>
-    <label class="f">version — must be changed to save (current: ${esc(r.version)})
-      <input id="rversion" value="${esc(r.version)}"></label>
-    <h2>Dimensions</h2>${dimFields}
-    <h2>Criteria (${r.criteria.length})</h2>${critFields}
-    <details class="raw"><summary class="muted">advanced: raw JSON (overrides fields above if edited)</summary>
-      <textarea id="rawjson" rows="16">${esc(JSON.stringify(r, null, 2))}</textarea></details>
-    <p><button class="primary" id="save">Save rubric</button> <span id="savemsg"></span></p>`;
+  return `<p><a href="#rubrics">← Rubrics</a></p>
+    <div class="card">
+      <h2>Edit: ${esc(r.name)}</h2>
+      <label class="f">Name<input id="rname" value="${esc(r.name)}"></label>
+      <label class="f">Version — must be changed to save (current: ${esc(r.version)})
+        <input id="rversion" value="${esc(r.version)}"></label>
+      <h3 style="margin-top:1rem">Dimensions</h3>${dimFields}
+      <h3 style="margin-top:1rem">Criteria (${r.criteria.length})</h3>${critFields}
+      <details class="raw"><summary class="muted">Advanced: raw JSON (overrides fields above if edited)</summary>
+        <textarea id="rawjson" rows="16">${esc(JSON.stringify(r, null, 2))}</textarea></details>
+      <p><button class="primary" id="save">Save rubric</button> <span id="savemsg"></span></p>
+    </div>`;
 }
+
+// ---------- notes actions (event delegation) ----------
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-action]");
+  if (!btn || !state.me) return;
+  const err = btn.parentElement?.querySelector?.(".err");
+  const setErr = (m) => { if (err) err.textContent = m; };
+  const org = state.me.org.orgId;
+  try {
+    if (btn.dataset.action === "add-note") {
+      const ta = $(`ta-${btn.dataset.ctx}`);
+      const text = ta.value.trim();
+      if (!text) return setErr("Write something first.");
+      btn.disabled = true;
+      const body = { traineeUid: btn.dataset.uid, text };
+      if (btn.dataset.session) body.sessionId = btn.dataset.session;
+      await api(`/v1/orgs/${org}/notes`, { method: "POST", body: JSON.stringify(body) });
+      await refreshNotes(); render();
+    } else if (btn.dataset.action === "edit-note") {
+      state.editingNoteId = btn.dataset.id; render();
+    } else if (btn.dataset.action === "cancel-edit") {
+      state.editingNoteId = null; render();
+    } else if (btn.dataset.action === "save-edit") {
+      const text = $(`edit-ta-${btn.dataset.id}`).value.trim();
+      if (!text) return setErr("Note can't be empty.");
+      btn.disabled = true;
+      await api(`/v1/orgs/${org}/notes/${btn.dataset.id}`, { method: "PATCH", body: JSON.stringify({ text }) });
+      state.editingNoteId = null;
+      await refreshNotes(); render();
+    } else if (btn.dataset.action === "del-note") {
+      if (btn.dataset.armed !== "1") {
+        btn.dataset.armed = "1"; btn.textContent = "Really delete?"; return;
+      }
+      btn.disabled = true;
+      await api(`/v1/orgs/${org}/notes/${btn.dataset.id}`, { method: "DELETE" });
+      await refreshNotes(); render();
+    }
+  } catch (ex) {
+    btn.disabled = false;
+    setErr(ex.message ?? "Something went wrong — try again.");
+  }
+});
 
 // ---------- router / auth ----------
 function render() {
   const h = location.hash || "#cohort";
   const [, page, arg] = h.match(/^#([a-z]+)(?:\/(.+))?$/) ?? [];
+  document.querySelectorAll("nav.top a.tab").forEach((a) => {
+    a.classList.toggle("on", a.dataset.tab === (page === "trainee" ? "cohort" : page === "rubric" ? "rubrics" : page ?? "cohort"));
+  });
   $("view").innerHTML =
     page === "trainee" && arg ? viewTrainee(decodeURIComponent(arg)) :
     page === "rubrics" ? viewRubrics() :
@@ -215,28 +340,47 @@ function render() {
 }
 window.addEventListener("hashchange", render);
 
+const LOGIN_ERRORS = {
+  "auth/invalid-credential": "Wrong email or password.",
+  "auth/wrong-password": "Wrong email or password.",
+  "auth/user-not-found": "Wrong email or password.",
+  "auth/invalid-email": "That doesn't look like an email address.",
+  "auth/too-many-requests": "Too many attempts — wait a few minutes and try again.",
+  "auth/network-request-failed": "Network problem — check your connection.",
+};
+
 $("login").addEventListener("submit", async (e) => {
   e.preventDefault();
-  $("status").textContent = "";
+  $("loginerr").textContent = "";
+  $("loginbtn").disabled = true;
+  $("loginbtn").textContent = "Signing in…";
   try {
     await signInWithEmailAndPassword(auth, $("email").value, $("password").value);
   } catch (err) {
-    $("status").textContent = err?.code ?? "sign-in failed";
+    $("loginerr").textContent = LOGIN_ERRORS[err?.code] ?? "Sign-in failed. Please try again.";
+  } finally {
+    $("loginbtn").disabled = false;
+    $("loginbtn").textContent = "Sign in";
   }
 });
 $("signout").addEventListener("click", () => signOut(auth));
 
 onAuthStateChanged(auth, async (user) => {
+  $("boot").hidden = true;
   if (!user) { $("app").hidden = true; $("auth").hidden = false; return; }
+  $("auth").hidden = true;
+  $("app").hidden = false;
+  $("view").innerHTML = `<div class="card"><div class="state"><div class="spin"></div>Loading your program…</div></div>`;
   try {
-    $("status").textContent = "loading…";
     await loadAll();
-    $("status").textContent = "";
-    $("who").textContent = `${state.me.email} · ${state.me.org.name}`;
-    $("auth").hidden = true; $("app").hidden = false;
+    $("who").textContent = `${state.me.email} · ${state.me.org.name} · Mentor`;
     render();
   } catch (err) {
-    $("status").textContent = err.message;
-    await signOut(auth).catch(() => {});
+    $("view").innerHTML = stateBox("⚠️", err.message ?? "Couldn't load",
+      '<button id="retry" class="primary small">Try again</button> or <a href="#" id="outlink">sign out</a>');
+    setTimeout(() => {
+      $("retry")?.addEventListener("click", () => location.reload());
+      $("outlink")?.addEventListener("click", (e2) => { e2.preventDefault(); signOut(auth); });
+    });
   }
 });
