@@ -367,21 +367,53 @@ app.get("/v1/orgs/:orgId/sessions", requireAuth, requireOrgAdmin, async (req, re
 
 // ---------- MC6: mentor notes + session delete (contract in PLAN.md) ----------
 
-const NOTE_POST_KEYS = new Set(["traineeUid", "sessionId", "text"]);
+const NOTE_POST_KEYS = new Set(["traineeUid", "sessionId", "criterionId", "text"]);
 
 function toNoteItem(doc) {
   const n = doc.data();
   return {
     noteId: doc.id,
     sessionId: n.sessionId ?? null,
+    criterionId: n.criterionId ?? null,
+    parentNoteId: n.parentNoteId ?? null, // internal: stripped from root items
     traineeUid: n.traineeUid,
     authorUid: n.authorUid,
     authorEmail: n.authorEmail ?? null,
     authorDisplayName: n.authorDisplayName ?? null,
+    authorRole: n.authorRole ?? "admin", // legacy notes are all mentor-authored
     text: n.text,
     createdAt: n.createdAt?.toDate()?.toISOString() ?? null,
     updatedAt: n.updatedAt?.toDate()?.toISOString() ?? null,
   };
+}
+
+// MC8: single-level threads — replies carry parentNoteId and inherit the
+// root's traineeUid/sessionId/criterionId, so one filtered query returns
+// whole threads. Roots newest-first (limit applies to roots); replies
+// chronological inside each root.
+function assembleThreads(docs, limit) {
+  const items = docs.map(toNoteItem);
+  const roots = items.filter((i) => !i.parentNoteId).sort(newestFirst).slice(0, limit);
+  const byId = new Map(roots.map((r) => [r.noteId, r]));
+  for (const r of roots) { r.replies = []; delete r.parentNoteId; }
+  for (const i of items) {
+    if (!i.parentNoteId) continue;
+    const root = byId.get(i.parentNoteId);
+    if (!root) continue; // orphan (cascade already removed root) — drop
+    root.replies.push({
+      replyId: i.noteId,
+      parentNoteId: i.parentNoteId,
+      authorUid: i.authorUid,
+      authorEmail: i.authorEmail,
+      authorDisplayName: i.authorDisplayName,
+      authorRole: i.authorRole,
+      text: i.text,
+      createdAt: i.createdAt,
+      updatedAt: i.updatedAt,
+    });
+  }
+  for (const r of roots) r.replies.sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+  return roots;
 }
 
 const newestFirst = (a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
@@ -396,7 +428,7 @@ app.get("/v1/me/notes", requireAuth, async (req, res, next) => {
       .collection(`orgs/${req.user.orgId}/notes`)
       .where("traineeUid", "==", req.user.uid)
       .get();
-    const notes = snap.docs.map(toNoteItem).sort(newestFirst).slice(0, clampLimit(req.query.limit));
+    const notes = assembleThreads(snap.docs, clampLimit(req.query.limit));
     res.json({ notes, count: notes.length });
   } catch (err) {
     next(err);
@@ -409,7 +441,7 @@ app.get("/v1/orgs/:orgId/notes", requireAuth, requireOrgAdmin, async (req, res, 
     if (req.query.traineeUid) q = q.where("traineeUid", "==", String(req.query.traineeUid));
     if (req.query.sessionId) q = q.where("sessionId", "==", String(req.query.sessionId));
     const snap = await q.get();
-    const notes = snap.docs.map(toNoteItem).sort(newestFirst).slice(0, clampLimit(req.query.limit));
+    const notes = assembleThreads(snap.docs, clampLimit(req.query.limit));
     res.json({ notes, count: notes.length });
   } catch (err) {
     next(err);
@@ -429,12 +461,18 @@ app.post("/v1/orgs/:orgId/notes", requireAuth, requireOrgAdmin, async (req, res,
     const textErr = noteTextError(b.text);
     if (textErr) return bad(textErr);
 
+    if (b.criterionId != null && (typeof b.criterionId !== "string" || !b.criterionId))
+      return bad("criterionId must be a non-empty string when present");
+    if (b.criterionId && !b.sessionId) return bad("criterionId requires sessionId");
+
     const member = await db.doc(`orgs/${req.params.orgId}/members/${b.traineeUid}`).get();
     if (!member.exists) return bad("traineeUid is not a member of this org");
     if (b.sessionId) {
       const sess = await db.doc(`orgs/${req.params.orgId}/sessions/${b.sessionId}`).get();
       if (!sess.exists) return bad("sessionId does not exist in this org");
       if (sess.get("uid") !== b.traineeUid) return bad("session does not belong to traineeUid");
+      if (b.criterionId && !(sess.get("criteria") ?? []).some((c) => c.id === b.criterionId))
+        return bad("criterionId is not present in that session's criteria");
     }
 
     const ref = db.collection(`orgs/${req.params.orgId}/notes`).doc();
@@ -442,18 +480,26 @@ app.post("/v1/orgs/:orgId/notes", requireAuth, requireOrgAdmin, async (req, res,
       orgId: req.params.orgId,
       traineeUid: b.traineeUid,
       sessionId: b.sessionId ?? null,
+      criterionId: b.criterionId ?? null,
+      parentNoteId: null,
       authorUid: req.user.uid,
       authorEmail: req.user.email,
       authorDisplayName: req.user.displayName,
+      authorRole: "admin",
       text: b.text,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
     audit(req, "note.create", {
-      org: req.params.orgId, noteId: ref.id, traineeUid: b.traineeUid, sessionId: b.sessionId ?? null,
+      org: req.params.orgId, noteId: ref.id, traineeUid: b.traineeUid,
+      sessionId: b.sessionId ?? null, criterionId: b.criterionId ?? null,
     });
     const item = toNoteItem(await ref.get());
-    await pushNoteToTrainee(req.params.orgId, b.traineeUid, item); // best-effort (MC7)
+    delete item.parentNoteId;
+    item.replies = [];
+    await sendPushToUser(b.traineeUid, "New note from your mentor", item.text, {
+      noteId: item.noteId, sessionId: item.sessionId ?? "", orgId: req.params.orgId,
+    });
     res.json(item);
   } catch (err) {
     next(err);
@@ -471,11 +517,13 @@ app.patch("/v1/orgs/:orgId/notes/:noteId", requireAuth, requireOrgAdmin, async (
     if (textErr) return res.status(400).json({ error: "invalid_body", detail: textErr });
     const ref = db.doc(`orgs/${req.params.orgId}/notes/${req.params.noteId}`);
     const snap = await ref.get();
-    if (!snap.exists) return res.status(404).json({ error: "not_found" });
+    if (!snap.exists || snap.get("parentNoteId")) return res.status(404).json({ error: "not_found" });
     if (snap.get("authorUid") !== req.user.uid) return res.status(403).json({ error: "forbidden" });
     await ref.update({ text: b.text, updatedAt: FieldValue.serverTimestamp() });
     audit(req, "note.update", { org: req.params.orgId, noteId: req.params.noteId });
-    res.json(toNoteItem(await ref.get()));
+    const item = toNoteItem(await ref.get());
+    delete item.parentNoteId;
+    res.json(item);
   } catch (err) {
     next(err);
   }
@@ -485,10 +533,125 @@ app.delete("/v1/orgs/:orgId/notes/:noteId", requireAuth, requireOrgAdmin, async 
   try {
     const ref = db.doc(`orgs/${req.params.orgId}/notes/${req.params.noteId}`);
     const snap = await ref.get();
-    if (!snap.exists) return res.status(404).json({ error: "not_found" });
+    if (!snap.exists || snap.get("parentNoteId")) return res.status(404).json({ error: "not_found" });
     if (snap.get("authorUid") !== req.user.uid) return res.status(403).json({ error: "forbidden" });
+    // MC8: deleting a root note takes its thread with it.
+    const replies = await db.collection(`orgs/${req.params.orgId}/notes`)
+      .where("parentNoteId", "==", req.params.noteId).get();
+    const batch = db.batch();
+    replies.docs.forEach((d) => batch.delete(d.ref));
+    batch.delete(ref);
+    await batch.commit();
+    audit(req, "note.delete", { org: req.params.orgId, noteId: req.params.noteId, cascadedReplies: replies.size });
+    res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------- MC8: threaded replies (contract in PLAN.md) ----------
+
+app.post("/v1/orgs/:orgId/notes/:noteId/replies", requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.orgId !== req.params.orgId) return res.status(403).json({ error: "forbidden" });
+    const b = req.body;
+    if (typeof b !== "object" || b === null || Array.isArray(b) ||
+        Object.keys(b).some((k) => k !== "text")) {
+      return res.status(400).json({ error: "invalid_body", detail: "body must be exactly { text }" });
+    }
+    const textErr = noteTextError(b.text);
+    if (textErr) return res.status(400).json({ error: "invalid_body", detail: textErr });
+
+    const rootSnap = await db.doc(`orgs/${req.params.orgId}/notes/${req.params.noteId}`).get();
+    if (!rootSnap.exists) return res.status(404).json({ error: "not_found" });
+    const root = rootSnap.data();
+    if (root.parentNoteId)
+      return res.status(400).json({ error: "invalid_body", detail: "replies attach to the root note (threads are single-level)" });
+    const isMentor = req.user.role === "admin";
+    if (!isMentor && root.traineeUid !== req.user.uid) return res.status(403).json({ error: "forbidden" });
+
+    const ref = db.collection(`orgs/${req.params.orgId}/notes`).doc();
+    await ref.set({
+      orgId: req.params.orgId,
+      parentNoteId: req.params.noteId,
+      // Inherited so filtered reads return whole threads (see PLAN.md):
+      traineeUid: root.traineeUid,
+      sessionId: root.sessionId ?? null,
+      criterionId: root.criterionId ?? null,
+      authorUid: req.user.uid,
+      authorEmail: req.user.email,
+      authorDisplayName: req.user.displayName,
+      authorRole: isMentor ? "admin" : "trainee",
+      text: b.text,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    audit(req, "note.reply.create", { org: req.params.orgId, noteId: req.params.noteId, replyId: ref.id });
+
+    // Notify the other party (MC7 sender; best-effort).
+    const target = isMentor ? root.traineeUid : root.authorUid;
+    const title = isMentor ? "Your mentor replied" : "New reply from your trainee";
+    await sendPushToUser(target, title, b.text, {
+      noteId: req.params.noteId, replyId: ref.id, orgId: req.params.orgId,
+    });
+
+    const i = toNoteItem(await ref.get());
+    res.json({
+      replyId: i.noteId, parentNoteId: i.parentNoteId, authorUid: i.authorUid,
+      authorEmail: i.authorEmail, authorDisplayName: i.authorDisplayName,
+      authorRole: i.authorRole, text: i.text, createdAt: i.createdAt, updatedAt: i.updatedAt,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+async function loadOwnReply(req, res) {
+  const ref = db.doc(`orgs/${req.params.orgId}/notes/${req.params.replyId}`);
+  const snap = await ref.get();
+  if (!snap.exists || snap.get("parentNoteId") !== req.params.noteId) {
+    res.status(404).json({ error: "not_found" });
+    return null;
+  }
+  if (snap.get("authorUid") !== req.user.uid) {
+    res.status(403).json({ error: "forbidden" });
+    return null;
+  }
+  return ref;
+}
+
+app.patch("/v1/orgs/:orgId/notes/:noteId/replies/:replyId", requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.orgId !== req.params.orgId) return res.status(403).json({ error: "forbidden" });
+    const b = req.body;
+    if (typeof b !== "object" || b === null || Array.isArray(b) ||
+        Object.keys(b).some((k) => k !== "text")) {
+      return res.status(400).json({ error: "invalid_body", detail: "body must be exactly { text }" });
+    }
+    const textErr = noteTextError(b.text);
+    if (textErr) return res.status(400).json({ error: "invalid_body", detail: textErr });
+    const ref = await loadOwnReply(req, res);
+    if (!ref) return;
+    await ref.update({ text: b.text, updatedAt: FieldValue.serverTimestamp() });
+    audit(req, "note.reply.update", { org: req.params.orgId, replyId: req.params.replyId });
+    const i = toNoteItem(await ref.get());
+    res.json({
+      replyId: i.noteId, parentNoteId: i.parentNoteId, authorUid: i.authorUid,
+      authorEmail: i.authorEmail, authorDisplayName: i.authorDisplayName,
+      authorRole: i.authorRole, text: i.text, createdAt: i.createdAt, updatedAt: i.updatedAt,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.delete("/v1/orgs/:orgId/notes/:noteId/replies/:replyId", requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.orgId !== req.params.orgId) return res.status(403).json({ error: "forbidden" });
+    const ref = await loadOwnReply(req, res);
+    if (!ref) return;
     await ref.delete();
-    audit(req, "note.delete", { org: req.params.orgId, noteId: req.params.noteId });
+    audit(req, "note.reply.delete", { org: req.params.orgId, replyId: req.params.replyId });
     res.json({ deleted: true });
   } catch (err) {
     next(err);
@@ -612,20 +775,20 @@ app.delete("/v1/me/push-token", requireAuth, async (req, res, next) => {
 
 // Best-effort: never throws into the request path; unregistered tokens are
 // pruned so the registry self-heals. Awaited before responding because Cloud
-// Run throttles CPU after the response is sent.
-async function pushNoteToTrainee(orgId, traineeUid, note) {
+// Run throttles CPU after the response is sent. (MC7; MC8 replies reuse it.)
+async function sendPushToUser(uid, title, text, data) {
   try {
-    const snap = await db.collection(`users/${traineeUid}/pushTokens`).get();
+    const snap = await db.collection(`users/${uid}/pushTokens`).get();
     if (snap.empty) return;
-    const text = note.text ?? "";
-    const body = text.length > 120 ? `${text.slice(0, 117)}…` : text;
+    const raw = text ?? "";
+    const body = raw.length > 120 ? `${raw.slice(0, 117)}…` : raw;
     const results = await Promise.allSettled(
       snap.docs.map((d) =>
         getMessaging()
           .send({
             token: d.id,
-            notification: { title: "New note from your mentor", body },
-            data: { noteId: note.noteId, sessionId: note.sessionId ?? "", orgId },
+            notification: { title, body },
+            data,
             apns: { payload: { aps: { sound: "default" } } },
           })
           .catch(async (err) => {
@@ -636,8 +799,8 @@ async function pushNoteToTrainee(orgId, traineeUid, note) {
     );
     const sent = results.filter((r) => r.status === "fulfilled").length;
     console.log(JSON.stringify({
-      severity: "INFO", type: "push", action: "note.push",
-      traineeUid, sent, tokens: snap.size,
+      severity: "INFO", type: "push", action: "push.send", title,
+      uid, sent, tokens: snap.size,
       firstError: results.find((r) => r.status === "rejected")?.reason?.code ?? null,
     }));
   } catch (err) {

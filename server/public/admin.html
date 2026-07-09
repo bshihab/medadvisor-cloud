@@ -123,7 +123,14 @@
   .dimcell { min-width: 132px; }
   /* Unified skill-area rows (spec in PLAN.md): label · bar · percent · trend */
   .skillrow { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 180px) 3.4rem 60px;
-              gap: .8rem; align-items: center; margin: .4rem 0; }
+              gap: .8rem; align-items: center; margin: .4rem 0; cursor: pointer;
+              border-radius: 8px; padding: .15rem .3rem; }
+  .skillrow:hover { background: color-mix(in srgb, var(--indigo) 7%, transparent); }
+  .inviterow { display: flex; gap: .7rem; align-items: center; padding: .45rem 0;
+               border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .inviterow:last-of-type { border-bottom: none; }
+  .mentorinv { color: var(--purple); font-weight: 550; font-size: .9rem; }
+  .mintbox { border-top: 2px solid var(--line); margin-top: .8rem; padding-top: .7rem; }
   .skillrow .bar { display: block; height: 10px; border-radius: 999px;
                    background: #88888833; overflow: hidden; }
   .skillrow .bar span { display: block; height: 100%; border-radius: 999px; }

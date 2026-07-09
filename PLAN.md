@@ -544,14 +544,20 @@ Joint milestone. Notes gain per-criterion anchoring + threaded replies;
 dashboard rebuilt person-first on React (decision logged — amends
 "no framework"). A-fixes ship on the current dashboard immediately; the
 rebuild carries the MC8 UIs so nothing is built twice.
-- DASH:  [ ] A-fixes (current SPA, ship now): session cards show date+time;
-      per-session headline becomes "X of Y met" (met / applicable, N/A
-      excluded — skill bars keep the unified spec); skill rows expand into
-      a clickable detail chart (per-session points → jump to that
-      session); invite section rewritten in plain words with mint action
-      separated from the active-code list.
-- CLOUD: [ ] per-criterion notes: optional `criterionId` (contract below)
-- CLOUD: [ ] threaded replies + reply push (contract below)
+- DASH:  [x] A-fixes SHIPPED (browser-verified on dev): date+time on session
+      cards; "X of Y met" headline; skill rows → clickable detail chart
+      with per-session points that jump to the session; invite section in
+      plain words ("Trainee code · 50 uses (47 left) · expires …" /
+      "Mentor code · single use"), single-use rationale caption, mint
+      action separated from the list.
+- CLOUD: [x] per-criterion notes — LIVE ON DEV, verified: criterionId
+      requires sessionId (400), must exist in that session's criteria
+      (400), valid path stores + surfaces it in all reads.
+- CLOUD: [x] threaded replies + reply push — LIVE ON DEV, verified: full
+      authz matrix (trainee-on-own ✓, both mentors ✓, nested reply 400,
+      non-author edit 403), threads ride chronologically in me/org reads
+      with authorRole, root delete cascades the thread, reply push wired
+      through the MC7 sender both directions.
 - DASH:  [ ] React rebuild: Vite + Tailwind + shadcn/ui + Recharts;
       person-first IA (pick a person → summary/progress | sessions &
       conversations); carries criterion-comment affordance + thread view.

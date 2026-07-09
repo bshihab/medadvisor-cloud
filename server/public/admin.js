@@ -13,6 +13,15 @@ const roleLabel = (r) => (r === "admin" ? "Mentor" : "Trainee");
 const roleBadge = (r) =>
   `<span class="badge ${r === "admin" ? "mentor" : "trainee"}">${roleLabel(r)}</span>`;
 const fmtDay = (iso) => (iso ? iso.slice(0, 10) : "—");
+const fmtWhen = (iso) => (iso
+  ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+  : "—");
+// Per-session headline (A-fix): the app's format — met / applicable, N/A excluded.
+const metOfY = (s) => {
+  const applicable = s.criteria.filter((c) => c.result !== "na");
+  const met = applicable.filter((c) => c.result === "met").length;
+  return `${met} of ${applicable.length} met`;
+};
 
 const cfg = await fetch("/v1/client-config").then((r) => r.json());
 const auth = getAuth(initializeApp(cfg));
@@ -166,33 +175,48 @@ function notesBlock(uid, sessionId, title) {
 }
 
 // ---------- views ----------
+// A-fix: plain-words invite descriptions; mint action visually separated
+// from the list of existing codes.
+const describeInvite = (i) => {
+  const usesLeft = i.maxUses != null ? i.maxUses - i.uses : null;
+  if (i.role === "admin") {
+    return `Mentor code · ${i.maxUses === 1 ? "single use" : `${i.maxUses} uses`}` +
+      `${i.uses ? " · already used" : ""} · expires ${fmtDay(i.expiresAt)}`;
+  }
+  return `Trainee code · ${i.maxUses} uses (${usesLeft} left) · expires ${fmtDay(i.expiresAt)}`;
+};
+
 function invitesCard() {
-  const rows = state.invites.map((i) => `<tr>
-    <td><code>${esc(i.code)}</code></td>
-    <td>${roleBadge(i.role)}</td>
-    <td>${i.uses}/${i.maxUses ?? "∞"}</td>
-    <td>${fmtDay(i.expiresAt)}</td>
-    <td><button class="small" data-action="copy-code" data-code="${esc(i.code)}">Copy</button></td>
-  </tr>`).join("");
+  const rows = state.invites.map((i) => `
+    <div class="inviterow">
+      <code>${esc(i.code)}</code>
+      <span class="${i.role === "admin" ? "mentorinv" : "muted"}">${esc(describeInvite(i))}</span>
+      <button class="small" data-action="copy-code" data-code="${esc(i.code)}">Copy</button>
+    </div>`).join("");
   return `<div class="card">
     <h2 style="font-size:1.05rem">Invite codes</h2>
-    ${state.freshCode ? `<p class="ok">New ${esc(roleLabel(state.freshCode.role))} code:
-      <code style="font-size:1.1em">${esc(state.freshCode.code)}</code>
-      <button class="small" data-action="copy-code" data-code="${esc(state.freshCode.code)}">Copy</button>
-      — expires ${fmtDay(state.freshCode.expiresAt)}</p>` : ""}
-    ${rows ? `<table><thead><tr><th>Code</th><th>Grants</th><th>Uses</th><th>Expires</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table>` : '<p class="muted">No active codes — mint one below.</p>'}
-    <div class="composer"><div class="row">
-      <select id="invrole" style="width:auto">
-        <option value="trainee">Trainee</option>
-        <option value="admin">Mentor — full program access</option>
-      </select>
-      <button class="primary small" data-action="mint-code">New invite code</button>
-      <span class="err"></span>
+    <p class="muted">Codes people type in the app under "Join my program".
+      Each code grants ONE role; a code isn't used up until someone redeems it.</p>
+    ${rows || '<p class="muted">No active codes yet.</p>'}
+    <div class="mintbox">
+      <strong style="font-size:.95rem">Create a new code</strong>
+      ${state.freshCode ? `<p class="ok" style="margin:.4rem 0">Created —
+        ${esc(roleLabel(state.freshCode.role))} code
+        <code style="font-size:1.1em">${esc(state.freshCode.code)}</code>
+        <button class="small" data-action="copy-code" data-code="${esc(state.freshCode.code)}">Copy</button>
+        · expires ${fmtDay(state.freshCode.expiresAt)}</p>` : ""}
+      <div class="row" style="display:flex;gap:.5rem;align-items:center;margin-top:.4rem">
+        <select id="invrole" style="width:auto">
+          <option value="trainee">Trainee code (50 uses, 30 days)</option>
+          <option value="admin">Mentor code (single use)</option>
+        </select>
+        <button class="primary small" data-action="mint-code">Create code</button>
+        <span class="err"></span>
+      </div>
+      <p class="muted" style="margin:.45rem 0 0">Mentor codes are single-use
+        on purpose: each one grants full access to every trainee's shared
+        data, so mint one per mentor and hand it over directly.</p>
     </div>
-    <p class="muted" style="margin:.2rem 0 0">Trainee codes: 50 uses, 30 days.
-      Mentor codes grant full access to every trainee's shared data — mint
-      single-use, share carefully.</p></div>
   </div>`;
 }
 
@@ -228,8 +252,9 @@ function viewTrainee(uid) {
     const series = ss.map((s) => dimensionScores(s)[d.id] ?? null);
     const latest = [...series].reverse().find((v) => v != null);
     const color = latest != null ? bandColor(latest) : "var(--na)";
-    return `<div class="skillrow" title="${latest != null ? esc(bandName(latest)) : ""}">
-      <span class="muted">${esc(d.label)}</span>
+    return `<div class="skillrow click" data-action="open-skill" data-uid="${esc(uid)}"
+      data-dim="${esc(d.id)}" title="${latest != null ? esc(bandName(latest)) : ""} — tap for detail">
+      <span class="muted">${esc(d.label)} ›</span>
       <span class="bar"><span style="width:${latest != null ? Math.round(latest * 100) : 0}%;background:${color}"></span></span>
       <span class="pct" style="color:${latest != null ? color : "var(--muted)"}">${pct(latest)}</span>
       ${trendLine(series, color)}
@@ -259,10 +284,10 @@ function viewTrainee(uid) {
           ${c.tip ? `<div class="tip">💡 ${esc(c.tip)}</div>` : ""}
         </div>`).join("")}
       </div>`).join("");
-    return `<div class="card">
-      <div><strong>${fmtDay(s.recordedAt)}</strong>
-        <span class="muted">· ${esc(s.location ?? "")} · ${esc(s.rubricId)} v${esc(s.rubricVersion)}
-        · overall ${pct(overallScore(s))}</span></div>
+    return `<div class="card" id="sess-${esc(s.sessionId)}">
+      <div><strong>${esc(fmtWhen(s.recordedAt))}</strong>
+        <span class="muted">· ${esc(s.location ?? "")} · ${esc(s.rubricId)} v${esc(s.rubricVersion)}</span>
+        · <strong>${esc(metOfY(s))}</strong></div>
       ${s.summary ? `<p>${esc(s.summary)}</p>` : ""}
       <details><summary class="muted">Criteria (${s.criteria.length})</summary>${groups}</details>
       <div style="margin-top:.6rem">${notesBlock(uid, s.sessionId, "Session notes")}</div>
@@ -285,6 +310,56 @@ function viewTrainee(uid) {
     <div class="card">${notesBlock(uid, null, "General notes")}</div>
     ${timelineHtml || stateBox("📭", "No shared sessions",
       "Sessions appear here as soon as the trainee shares them from the app.")}`;
+}
+
+// A-fix: summary → detail, like the app. Big per-skill chart with one
+// clickable point per session (jumps to that session's card).
+function viewSkillDetail(uid, dimId) {
+  const m = state.members.find((x) => x.uid === uid);
+  if (!m) return stateBox("🤔", "Unknown member", '<a href="#cohort">Back to cohort</a>');
+  const ss = sessionsOf(uid);
+  const latestRubric = ss.length ? rubricDoc(ss.at(-1).rubricId) : null;
+  const label = latestRubric?.dimensions?.find((d) => d.id === dimId)?.label ?? dimId;
+  const points = ss
+    .map((s) => ({ score: dimensionScores(s)[dimId] ?? null, s }))
+    .filter((p) => p.score != null);
+
+  let chart = '<p class="muted">No scored sessions for this skill area yet.</p>';
+  if (points.length) {
+    const W = 640, H = 240, L = 34, R = 12, T = 14, B = 34;
+    const px = (i) => L + (points.length === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (points.length - 1));
+    const py = (v) => T + (1 - v) * (H - T - B);
+    const grid = [0, 0.5, 1].map((v) =>
+      `<line x1="${L}" y1="${py(v)}" x2="${W - R}" y2="${py(v)}" stroke="var(--line)" stroke-width="1"/>
+       <text x="${L - 6}" y="${py(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${v * 100}%</text>`).join("");
+    const pts = points.map((p, i) => ({ x: px(i), y: py(p.score) }));
+    let path = "";
+    if (pts.length > 1) {
+      path = `M ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i - 1] ?? pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] ?? p2;
+        path += ` C ${(p1.x + (p2.x - p0.x) / 6).toFixed(1)},${(p1.y + (p2.y - p0.y) / 6).toFixed(1)}
+          ${(p2.x - (p3.x - p1.x) / 6).toFixed(1)},${(p2.y - (p3.y - p1.y) / 6).toFixed(1)}
+          ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+      }
+      path = `<path d="${path}" fill="none" stroke="${bandColor(points.at(-1).score)}" stroke-width="2.5" stroke-linecap="round"/>`;
+    }
+    const dots = points.map((p, i) => `
+      <circle cx="${px(i)}" cy="${py(p.score)}" r="6" fill="${bandColor(p.score)}"
+        data-action="goto-session" data-uid="${esc(uid)}" data-session="${esc(p.s.sessionId)}"
+        style="cursor:pointer"><title>${esc(fmtWhen(p.s.recordedAt))} — ${pct(p.score)} (tap to open session)</title></circle>
+      <text x="${px(i)}" y="${H - 12}" text-anchor="middle" font-size="11" fill="var(--muted)">${esc(fmtDay(p.s.recordedAt).slice(5))}</text>`).join("");
+    chart = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}${path}${dots}</svg>
+      <p class="muted">Each point is one session — tap a point to open that session below.</p>`;
+  }
+  const latest = points.at(-1)?.score;
+  return `<p><a href="#trainee/${esc(uid)}">← ${esc(memberName(m))}</a></p>
+    <div class="card">
+      <h2>${esc(label)}
+        ${latest != null ? `<span class="badge" style="background:${bandColor(latest)}">${esc(bandName(latest))} · ${pct(latest)}</span>` : ""}
+      </h2>
+      ${chart}
+    </div>`;
 }
 
 function viewRubrics() {
@@ -418,6 +493,11 @@ document.addEventListener("click", async (e) => {
       await navigator.clipboard.writeText(btn.dataset.code);
       btn.textContent = "Copied!";
       setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+    } else if (btn.dataset.action === "open-skill") {
+      location.hash = `#skill/${btn.dataset.uid}/${encodeURIComponent(btn.dataset.dim)}`;
+    } else if (btn.dataset.action === "goto-session") {
+      state.scrollTo = `sess-${btn.dataset.session}`;
+      location.hash = `#trainee/${btn.dataset.uid}`;
     }
   } catch (ex) {
     btn.disabled = false;
@@ -431,13 +511,21 @@ function render() {
   const h = location.hash || "#cohort";
   const [, page, arg] = h.match(/^#([a-z]+)(?:\/(.+))?$/) ?? [];
   document.querySelectorAll("nav.top a.tab").forEach((a) => {
-    a.classList.toggle("on", a.dataset.tab === (page === "trainee" ? "cohort" : page === "rubric" ? "rubrics" : page ?? "cohort"));
+    const tabOf = { trainee: "cohort", skill: "cohort", rubric: "rubrics" }[page] ?? page ?? "cohort";
+    a.classList.toggle("on", a.dataset.tab === tabOf);
   });
   $("view").innerHTML =
     page === "trainee" && arg ? viewTrainee(decodeURIComponent(arg)) :
+    page === "skill" && arg?.includes("/")
+      ? viewSkillDetail(...arg.split("/", 2).map(decodeURIComponent)) :
     page === "rubrics" ? viewRubrics() :
     page === "rubric" && arg ? viewRubricEditor(decodeURIComponent(arg)) :
     viewCohort();
+  if (state.scrollTo) {
+    const target = state.scrollTo;
+    state.scrollTo = null;
+    setTimeout(() => document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  }
 }
 window.addEventListener("hashchange", render);
 
