@@ -114,18 +114,21 @@ amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
   credential → `signIn(with:)`), and — AMENDED 2026-07-08 — **Google**.
 
   **Google sign-in (added 2026-07-08; iOS-lane contract):**
-  STATUS: config PENDING Bilal's Firebase-console toggle (see below);
-  everything stated here is settled and won't change — only the two ID
-  values get filled in after enablement.
+  STATUS: dev SETTLED & VERIFIED 2026-07-08 (provider enabled, web client
+  auto-set, iOS client provisioned) — the iOS chat can build and test
+  against dev now. Prod = same console toggle, pending Bilal.
   - iOS flow: GoogleSignIn SDK natively → `GIDSignIn.sharedInstance.signIn`
     → `GoogleAuthProvider.credential(withIDToken:accessToken:)` →
     `auth.signIn(with:)`. Same project-level account pool as the other
     providers — NEVER set `auth.tenantID`. Our API is not involved.
-  - **iOS OAuth client IDs (per env; filled after enablement):**
-    - dev:  CLIENT_ID `⏳ pending` · REVERSED_CLIENT_ID `⏳ pending`
-    - prod: CLIENT_ID `⏳ pending` · REVERSED_CLIENT_ID `⏳ pending`
+  - **iOS OAuth client IDs (per env):**
+    - dev CLIENT_ID:
+      `743594385075-k98bthp09fubpvsk54ni65ji8ic5ia1j.apps.googleusercontent.com`
+    - dev REVERSED_CLIENT_ID (register as URL scheme):
+      `com.googleusercontent.apps.743594385075-k98bthp09fubpvsk54ni65ji8ic5ia1j`
+    - prod: `⏳ pending the same console toggle on medadvisor-production`
     They land in the refreshed `GoogleService-Info.plist` per env (re-pull
-    it); the app registers REVERSED_CLIENT_ID as a URL scheme.
+    it — dev plist now carries them).
   - **Account linking (verified in IdP config, both envs):**
     `signIn.allowDuplicateEmails = false` → **one account per email**.
     Google sign-in with an email that already has a password/Apple account
