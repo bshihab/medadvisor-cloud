@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { Firestore, FieldValue } from "@google-cloud/firestore";
@@ -9,7 +10,38 @@ import { getAuth } from "firebase-admin/auth";
 // Client-facing contracts live in PLAN.md (MC1/MC2 Interface) — keep in sync.
 const PROJECT_ID = process.env.PROJECT_ID ?? "medadvisor-dev";
 const app = express();
+app.disable("x-powered-by");
+// Cloud Run's frontend appends the real client IP as the last X-Forwarded-For
+// entry; trusting exactly 1 hop makes req.ip that entry (unspoofable).
+app.set("trust proxy", 1);
 app.use(express.json());
+
+// MC5: rate limiting. Store is per-instance memory — with max-instances=2 the
+// effective ceiling is up to 2x the stated numbers, which is fine at our scale.
+const limiter = (max, windowMs = 15 * 60_000) =>
+  rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req, res) => res.status(429).json({ error: "rate_limited" }),
+  });
+app.use(limiter(600));                        // global: 600 / 15 min / IP
+app.use("/v1/invites/redeem", limiter(20));   // slow invite-code guessing
+app.use("/v1/sessions", limiter(120));
+
+// MC5: application-level audit log — one structured line per sensitive action,
+// picked up by Cloud Logging. Never log payload content (quotes/summaries).
+const audit = (req, action, details = {}) =>
+  console.log(JSON.stringify({
+    severity: "NOTICE",
+    type: "audit",
+    action,
+    uid: req.user?.uid ?? null,
+    orgId: req.user?.orgId ?? null,
+    ip: req.ip,
+    ...details,
+  }));
 
 const db = new Firestore({ projectId: PROJECT_ID });
 initializeApp({ projectId: PROJECT_ID });
@@ -128,6 +160,7 @@ app.post("/v1/invites/redeem", requireAuth, async (req, res, next) => {
     if (!result.alreadyMember) {
       await getAuth().setCustomUserClaims(req.user.uid, { orgId: result.orgId, role: result.role });
     }
+    audit(req, "invite.redeem", { org: result.orgId, alreadyMember: result.alreadyMember });
     res.json(result);
   } catch (err) {
     next(err);
@@ -164,6 +197,7 @@ app.get("/v1/orgs/:orgId/members", requireAuth, requireOrgAdmin, async (req, res
         joinedAt: m.joinedAt?.toDate()?.toISOString() ?? null,
       };
     });
+    audit(req, "org.members.read", { org: req.params.orgId });
     res.json({ members, count: members.length });
   } catch (err) {
     next(err);
@@ -187,6 +221,7 @@ app.post("/v1/orgs/:orgId/invites", requireAuth, requireOrgAdmin, async (req, re
       createdAt: FieldValue.serverTimestamp(),
       expiresAt,
     });
+    audit(req, "invite.create", { org: req.params.orgId, role, maxUses });
     res.json({ code, orgId: req.params.orgId, role, maxUses, expiresAt: expiresAt.toISOString() });
   } catch (err) {
     next(err);
@@ -280,6 +315,7 @@ app.post("/v1/sessions", requireAuth, async (req, res, next) => {
         tip: c.tip ?? null,
       })),
     });
+    audit(req, "session.upsert", { sessionId, rubricId: b.rubricId });
     res.json({ sessionId });
   } catch (err) {
     next(err);
@@ -317,6 +353,7 @@ app.get("/v1/orgs/:orgId/sessions", requireAuth, requireOrgAdmin, async (req, re
     } else {
       docs = (await col.orderBy("recordedAt", "desc").limit(limit).get()).docs.map(toSessionItem);
     }
+    audit(req, "org.sessions.read", { org: req.params.orgId, uidFilter: req.query.uid ?? null });
     res.json({ sessions: docs, count: docs.length });
   } catch (err) {
     next(err);
@@ -362,6 +399,7 @@ app.put("/v1/rubrics/:id", requireAuth, async (req, res, next) => {
       return res.status(409).json({ error: "version_conflict", detail: "version must change on any edit" });
     }
     const wr = await ref.set(req.body);
+    audit(req, "rubric.update", { rubricId: req.params.id, version: req.body.version });
     res.json({ id: req.params.id, version: req.body.version, updatedAt: wr.writeTime.toDate().toISOString() });
   } catch (err) {
     next(err);

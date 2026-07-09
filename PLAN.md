@@ -263,11 +263,25 @@ Data feeds ready: roster (MC2) + sessions reads (MC3 cloud, ± uid filter).
   - Rubric store stays GLOBAL (not org-scoped) in v1 — acceptable while
     org #1 is the only design partner; revisit at second institution.
 
-## MC5 — Hardening                                     Status: NOT STARTED
-- [ ] Rate limiting on the API; audit logging
-- [ ] Google BAA signed; security-rules review
-- [ ] Staging environment; monitoring/alerting
-- [ ] Custom domains: dashboard + R2 model bucket (r2.dev is dev-mode)
+## MC5 — Hardening                                     Status: IN PROGRESS
+Full control-by-control status: `infra/security-checklist.md`.
+- [x] Rate limiting (600/15min global, 20 redeem, 120 sessions, per IP) —
+      verified live (429 after limit); audit logging (structured, no payload
+      content, 6 action types) — verified in Cloud Logging. Deployed to dev;
+      prod deploy pending approval.
+- [x] Monitoring/alerting: /health uptime checks every 5 min + email alert
+      policies on BOTH projects (to shihabbilal@gmail.com).
+- [x] Security-rules review — written up in the checklist (rules deny-all
+      both envs; token/authz/no-transcript controls verified).
+- [ ] BLOCKED on Bilal approval (commands ready in checklist): least-priv
+      runtime service account (dev+prod), API-key restrictions,
+      Firestore data-access audit logs on prod, prod deploy of this build.
+- [ ] Google BAA — Bilal console action (steps in checklist). REQUIRED
+      before real-patient-derived data on prod.
+- [ ] Custom domains: dashboard + R2 bucket — needs domain name +
+      Cloudflare access from Bilal.
+- [ ] Staging environment — PROPOSED: defer to pre-GA (see checklist ⏸;
+      also consumes 019BCD's last billing slot). Awaiting Bilal's call.
 - **Accept:** security checklist pass; billing caps verified end-to-end.
 
 ---
