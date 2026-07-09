@@ -113,22 +113,42 @@ amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
   Apple identity token + raw nonce in an `OAuthProvider` "apple.com"
   credential → `signIn(with:)`), and — AMENDED 2026-07-08 — **Google**.
 
-  **Google sign-in (added 2026-07-08; iOS-lane notes):**
-  - iOS flow: GoogleSignIn SDK → `GIDSignIn.sharedInstance.signIn` →
-    `GoogleAuthProvider.credential(withIDToken:accessToken:)` →
-    `auth.signIn(with:)`. Requires the updated `GoogleService-Info.plist`
-    (enabling the provider adds `CLIENT_ID`/`REVERSED_CLIENT_ID`) — re-pull
-    it per env; add `REVERSED_CLIENT_ID` as a URL scheme in the target.
-  - Same-email semantics: Identity Platform runs "one account per email" —
-    Google sign-in with an email that already has a password account
-    resolves to the SAME uid (linked), so org membership and claims
-    survive. Test both orders (password-then-Google, Google-then-password).
-  - Login screen: per Review 4.8, the Apple button must remain at least as
+  **Google sign-in (added 2026-07-08; iOS-lane contract):**
+  STATUS: config PENDING Bilal's Firebase-console toggle (see below);
+  everything stated here is settled and won't change — only the two ID
+  values get filled in after enablement.
+  - iOS flow: GoogleSignIn SDK natively → `GIDSignIn.sharedInstance.signIn`
+    → `GoogleAuthProvider.credential(withIDToken:accessToken:)` →
+    `auth.signIn(with:)`. Same project-level account pool as the other
+    providers — NEVER set `auth.tenantID`. Our API is not involved.
+  - **iOS OAuth client IDs (per env; filled after enablement):**
+    - dev:  CLIENT_ID `⏳ pending` · REVERSED_CLIENT_ID `⏳ pending`
+    - prod: CLIENT_ID `⏳ pending` · REVERSED_CLIENT_ID `⏳ pending`
+    They land in the refreshed `GoogleService-Info.plist` per env (re-pull
+    it); the app registers REVERSED_CLIENT_ID as a URL scheme.
+  - **Account linking (verified in IdP config, both envs):**
+    `signIn.allowDuplicateEmails = false` → **one account per email**.
+    Google sign-in with an email that already has a password/Apple account
+    resolves to the SAME uid, so org membership and custom claims survive.
+    The app may still see `auth/account-exists-with-different-credential`
+    for non-Google providers colliding with an email — word the error as
+    "You already have an account with this email — sign in with the method
+    you used before." Test both orders (password→Google, Google→password).
+  - **Server-side web client (invisible to the app):** yes, the IdP
+    `google.com` provider config requires a WEB client id/secret — the
+    Firebase console toggle provisions and sets it automatically; I verify
+    it's populated after enablement. Nothing for the app to do with it.
+  - Login screen: per Review 4.8 the Apple button stays at least as
     prominent as Google's.
-  - Dashboard has a "Continue with Google" popup button (needs the
-    dashboard host in IdP authorizedDomains — done for both envs).
-  - Enablement is per-project via Firebase console (auto-provisions the
-    OAuth clients; the REST API can't) — Bilal clicks it for dev + prod.
+  - Dashboard Google-login: OUT OF SCOPE for mentors now (email works).
+    A "Continue with Google" button already exists on /admin from earlier
+    same-day work — it stays as a bonus and simply starts working once the
+    provider is enabled; treat as future option, not a deliverable.
+  - Why console, not API: enabling `google.com` requires OAuth clients and
+    Google exposes no API to create them; the Firebase console toggle
+    auto-provisions web + iOS clients for registered apps (verified:
+    REST returns "client_id cannot be empty", and neither project has an
+    iOS OAuth client yet — plists carry no CLIENT_ID).
 
   Client config (public client identifiers, not secrets — they ship in
   the app bundle):
