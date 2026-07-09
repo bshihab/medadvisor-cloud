@@ -310,10 +310,16 @@ vanilla JS, no framework (polish ≠ rewrite; framework decision stands).
 
 ## MC6 — Mentor notes, session delete, mentor invites  Status: IN PROGRESS
 Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
-- CLOUD: [ ] notes model + endpoints (contract below)
-- CLOUD: [ ] `DELETE /v1/sessions/:clientSessionId` (contract below)
-- CLOUD: [ ] verify `role: admin` invite codes end-to-end (issue → redeem →
-      claims) — machinery shipped in MC2, needs live verification
+- CLOUD: [x] notes model + endpoints — LIVE ON DEV, verified: CRUD, newest-
+      first reads, unknown-key/membership/session-ownership validation,
+      author-only edit/delete (403), re-delete 404, trainee POST 403.
+      Prod held for Bilal's go-ahead.
+- CLOUD: [x] `DELETE /v1/sessions/:clientSessionId` — LIVE ON DEV, verified:
+      owner delete 200, re-delete 404, foreign clientSessionId 404 (own-
+      namespace resolution), vanishes from reads, attached note cascaded.
+- CLOUD: [x] `role: admin` codes verified end-to-end on dev 2026-07-08:
+      mint (maxUses 1) → fresh signup → redeem → claims `admin` after token
+      refresh → roster read 200. Mentor joining works exactly like trainee.
 - DASH:  [ ] notes UI in drill-in: write/edit/delete a note on a session and
       on the trainee generally
 - iOS:   [ ] mentor-notes display + unread badge (consumes notes reads)

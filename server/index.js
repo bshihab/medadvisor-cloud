@@ -360,6 +360,159 @@ app.get("/v1/orgs/:orgId/sessions", requireAuth, requireOrgAdmin, async (req, re
   }
 });
 
+// ---------- MC6: mentor notes + session delete (contract in PLAN.md) ----------
+
+const NOTE_POST_KEYS = new Set(["traineeUid", "sessionId", "text"]);
+
+function toNoteItem(doc) {
+  const n = doc.data();
+  return {
+    noteId: doc.id,
+    sessionId: n.sessionId ?? null,
+    traineeUid: n.traineeUid,
+    authorUid: n.authorUid,
+    authorEmail: n.authorEmail ?? null,
+    authorDisplayName: n.authorDisplayName ?? null,
+    text: n.text,
+    createdAt: n.createdAt?.toDate()?.toISOString() ?? null,
+    updatedAt: n.updatedAt?.toDate()?.toISOString() ?? null,
+  };
+}
+
+const newestFirst = (a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
+const noteTextError = (t) =>
+  typeof t !== "string" || t.length < 1 || t.length > 4000
+    ? "text must be a string of 1-4000 chars" : null;
+
+app.get("/v1/me/notes", requireAuth, async (req, res, next) => {
+  try {
+    if (!req.user.orgId) return res.json({ notes: [], count: 0 });
+    const snap = await db
+      .collection(`orgs/${req.user.orgId}/notes`)
+      .where("traineeUid", "==", req.user.uid)
+      .get();
+    const notes = snap.docs.map(toNoteItem).sort(newestFirst).slice(0, clampLimit(req.query.limit));
+    res.json({ notes, count: notes.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get("/v1/orgs/:orgId/notes", requireAuth, requireOrgAdmin, async (req, res, next) => {
+  try {
+    let q = db.collection(`orgs/${req.params.orgId}/notes`);
+    if (req.query.traineeUid) q = q.where("traineeUid", "==", String(req.query.traineeUid));
+    if (req.query.sessionId) q = q.where("sessionId", "==", String(req.query.sessionId));
+    const snap = await q.get();
+    const notes = snap.docs.map(toNoteItem).sort(newestFirst).slice(0, clampLimit(req.query.limit));
+    res.json({ notes, count: notes.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post("/v1/orgs/:orgId/notes", requireAuth, requireOrgAdmin, async (req, res, next) => {
+  try {
+    const b = req.body;
+    const bad = (detail) => res.status(400).json({ error: "invalid_body", detail });
+    if (typeof b !== "object" || b === null || Array.isArray(b)) return bad("body must be a JSON object");
+    const unknown = Object.keys(b).filter((k) => !NOTE_POST_KEYS.has(k));
+    if (unknown.length) return bad(`unknown keys: ${unknown.join(", ")}`);
+    if (typeof b.traineeUid !== "string" || !b.traineeUid) return bad("traineeUid is required");
+    if (b.sessionId != null && (typeof b.sessionId !== "string" || !b.sessionId))
+      return bad("sessionId must be a non-empty string when present");
+    const textErr = noteTextError(b.text);
+    if (textErr) return bad(textErr);
+
+    const member = await db.doc(`orgs/${req.params.orgId}/members/${b.traineeUid}`).get();
+    if (!member.exists) return bad("traineeUid is not a member of this org");
+    if (b.sessionId) {
+      const sess = await db.doc(`orgs/${req.params.orgId}/sessions/${b.sessionId}`).get();
+      if (!sess.exists) return bad("sessionId does not exist in this org");
+      if (sess.get("uid") !== b.traineeUid) return bad("session does not belong to traineeUid");
+    }
+
+    const ref = db.collection(`orgs/${req.params.orgId}/notes`).doc();
+    await ref.set({
+      orgId: req.params.orgId,
+      traineeUid: b.traineeUid,
+      sessionId: b.sessionId ?? null,
+      authorUid: req.user.uid,
+      authorEmail: req.user.email,
+      authorDisplayName: req.user.displayName,
+      text: b.text,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    audit(req, "note.create", {
+      org: req.params.orgId, noteId: ref.id, traineeUid: b.traineeUid, sessionId: b.sessionId ?? null,
+    });
+    res.json(toNoteItem(await ref.get()));
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.patch("/v1/orgs/:orgId/notes/:noteId", requireAuth, requireOrgAdmin, async (req, res, next) => {
+  try {
+    const b = req.body;
+    if (typeof b !== "object" || b === null || Array.isArray(b) ||
+        Object.keys(b).some((k) => k !== "text")) {
+      return res.status(400).json({ error: "invalid_body", detail: "body must be exactly { text }" });
+    }
+    const textErr = noteTextError(b.text);
+    if (textErr) return res.status(400).json({ error: "invalid_body", detail: textErr });
+    const ref = db.doc(`orgs/${req.params.orgId}/notes/${req.params.noteId}`);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "not_found" });
+    if (snap.get("authorUid") !== req.user.uid) return res.status(403).json({ error: "forbidden" });
+    await ref.update({ text: b.text, updatedAt: FieldValue.serverTimestamp() });
+    audit(req, "note.update", { org: req.params.orgId, noteId: req.params.noteId });
+    res.json(toNoteItem(await ref.get()));
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.delete("/v1/orgs/:orgId/notes/:noteId", requireAuth, requireOrgAdmin, async (req, res, next) => {
+  try {
+    const ref = db.doc(`orgs/${req.params.orgId}/notes/${req.params.noteId}`);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "not_found" });
+    if (snap.get("authorUid") !== req.user.uid) return res.status(403).json({ error: "forbidden" });
+    await ref.delete();
+    audit(req, "note.delete", { org: req.params.orgId, noteId: req.params.noteId });
+    res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Owner-only by construction: the doc id embeds the caller's uid, so a
+// foreign clientSessionId resolves inside the caller's own namespace → 404.
+app.delete("/v1/sessions/:clientSessionId", requireAuth, async (req, res, next) => {
+  try {
+    if (!req.user.orgId) return res.status(403).json({ error: "forbidden" });
+    const sessionId = `${req.user.uid}__${req.params.clientSessionId}`;
+    const ref = db.doc(`orgs/${req.user.orgId}/sessions/${sessionId}`);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "not_found" });
+    // Cascade: a retracted session leaves nothing behind, including notes.
+    const notesSnap = await db
+      .collection(`orgs/${req.user.orgId}/notes`)
+      .where("sessionId", "==", sessionId)
+      .get();
+    const batch = db.batch();
+    notesSnap.docs.forEach((d) => batch.delete(d.ref));
+    batch.delete(ref);
+    await batch.commit();
+    audit(req, "session.delete", { sessionId, cascadedNotes: notesSnap.size });
+    res.json({ deleted: true, sessionId });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ---------- MC4: rubric editor write (admin only; contract in PLAN.md) ----------
 
 function rubricBodyError(b, id) {
