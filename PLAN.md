@@ -108,10 +108,27 @@ amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
 
   **How the app signs in** — FirebaseAuth iOS SDK, straight to Identity
   Platform (our API is not involved in sign-in). Project-level accounts:
-  NEVER set `auth.tenantID`. Providers enabled: email/password and
+  NEVER set `auth.tenantID`. Providers enabled: email/password,
   Sign in with Apple (native `ASAuthorizationController` flow → wrap the
   Apple identity token + raw nonce in an `OAuthProvider` "apple.com"
-  credential → `signIn(with:)`).
+  credential → `signIn(with:)`), and — AMENDED 2026-07-08 — **Google**.
+
+  **Google sign-in (added 2026-07-08; iOS-lane notes):**
+  - iOS flow: GoogleSignIn SDK → `GIDSignIn.sharedInstance.signIn` →
+    `GoogleAuthProvider.credential(withIDToken:accessToken:)` →
+    `auth.signIn(with:)`. Requires the updated `GoogleService-Info.plist`
+    (enabling the provider adds `CLIENT_ID`/`REVERSED_CLIENT_ID`) — re-pull
+    it per env; add `REVERSED_CLIENT_ID` as a URL scheme in the target.
+  - Same-email semantics: Identity Platform runs "one account per email" —
+    Google sign-in with an email that already has a password account
+    resolves to the SAME uid (linked), so org membership and claims
+    survive. Test both orders (password-then-Google, Google-then-password).
+  - Login screen: per Review 4.8, the Apple button must remain at least as
+    prominent as Google's.
+  - Dashboard has a "Continue with Google" popup button (needs the
+    dashboard host in IdP authorizedDomains — done for both envs).
+  - Enablement is per-project via Firebase console (auto-provisions the
+    OAuth clients; the REST API can't) — Bilal clicks it for dev + prod.
 
   Client config (public client identifiers, not secrets — they ship in
   the app bundle):
@@ -442,3 +459,7 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
 - 2026-07-08 **Mentor notes ship phase-1 pull-based.** No push notifications;
   client polls on launch/foreground and badges via last-seen timestamp.
   APNs is a future milestone.
+- 2026-07-08 **Sign in with Google added** as a third provider (Bilal's call;
+  trainees often live in institutional Google accounts). Apple button keeps
+  ≥ equal prominence per App Review 4.8. Same-email sign-ins link to one
+  account, so no membership migration is needed.

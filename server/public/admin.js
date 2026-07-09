@@ -3,6 +3,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
+  GoogleAuthProvider, signInWithPopup,
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
 const $ = (id) => document.getElementById(id);
@@ -364,6 +365,19 @@ $("login").addEventListener("submit", async (e) => {
   }
 });
 $("signout").addEventListener("click", () => signOut(auth));
+
+$("googlebtn").addEventListener("click", async () => {
+  $("loginerr").textContent = "";
+  try {
+    await signInWithPopup(auth, new GoogleAuthProvider());
+  } catch (err) {
+    if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") return;
+    $("loginerr").textContent =
+      err?.code === "auth/operation-not-allowed"
+        ? "Google sign-in isn't enabled yet for this environment."
+        : LOGIN_ERRORS[err?.code] ?? "Google sign-in failed. Please try again.";
+  }
+});
 
 onAuthStateChanged(auth, async (user) => {
   $("boot").hidden = true;
