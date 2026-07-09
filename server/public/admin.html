@@ -121,6 +121,15 @@
   .tip { font-size: .88em; color: var(--muted); margin-left: .4rem; }
   .dimrow { display: flex; gap: 1.1rem; flex-wrap: wrap; }
   .dimcell { min-width: 132px; }
+  /* Unified skill-area rows (spec in PLAN.md): label · bar · percent · trend */
+  .skillrow { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 180px) 3.4rem 60px;
+              gap: .8rem; align-items: center; margin: .4rem 0; }
+  .skillrow .bar { display: block; height: 10px; border-radius: 999px;
+                   background: #88888833; overflow: hidden; }
+  .skillrow .bar span { display: block; height: 100%; border-radius: 999px; }
+  .skillrow .pct { font-weight: 600; font-variant-numeric: tabular-nums;
+                   font-family: ui-monospace, "SF Mono", Menlo, monospace;
+                   font-size: .92rem; text-align: right; }
   svg.spark { display: block; }
 
   .note { border-top: 1px solid var(--line); padding: .6rem 0; }

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Firestore, FieldValue } from "@google-cloud/firestore";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { getMessaging } from "firebase-admin/messaging";
 
 // MedAdvisor cloud API — MC1 rubrics (public read) + MC2 accounts/orgs.
 // Client-facing contracts live in PLAN.md (MC1/MC2 Interface) — keep in sync.
@@ -451,7 +452,9 @@ app.post("/v1/orgs/:orgId/notes", requireAuth, requireOrgAdmin, async (req, res,
     audit(req, "note.create", {
       org: req.params.orgId, noteId: ref.id, traineeUid: b.traineeUid, sessionId: b.sessionId ?? null,
     });
-    res.json(toNoteItem(await ref.get()));
+    const item = toNoteItem(await ref.get());
+    await pushNoteToTrainee(req.params.orgId, b.traineeUid, item); // best-effort (MC7)
+    res.json(item);
   } catch (err) {
     next(err);
   }
@@ -570,6 +573,77 @@ app.get("/v1/orgs/:orgId/invites", requireAuth, requireOrgAdmin, async (req, res
     next(err);
   }
 });
+
+// ---------- MC7: push tokens + note push (contract in PLAN.md) ----------
+
+const PUSH_TOKEN_RE = /^[A-Za-z0-9:_-]{10,512}$/;
+
+app.post("/v1/me/push-token", requireAuth, async (req, res, next) => {
+  try {
+    const token = String(req.body?.token ?? "");
+    const platform = String(req.body?.platform ?? "ios");
+    if (!PUSH_TOKEN_RE.test(token))
+      return res.status(400).json({ error: "invalid_body", detail: "token must match [A-Za-z0-9:_-]{10,512}" });
+    if (platform.length > 20)
+      return res.status(400).json({ error: "invalid_body", detail: "platform too long" });
+    await db.doc(`users/${req.user.uid}/pushTokens/${token}`).set(
+      { platform, lastSeenAt: FieldValue.serverTimestamp() },
+      { merge: true },
+    );
+    audit(req, "push.token.register", { platform });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.delete("/v1/me/push-token", requireAuth, async (req, res, next) => {
+  try {
+    const token = String(req.body?.token ?? "");
+    if (!PUSH_TOKEN_RE.test(token))
+      return res.status(400).json({ error: "invalid_body", detail: "token must match [A-Za-z0-9:_-]{10,512}" });
+    await db.doc(`users/${req.user.uid}/pushTokens/${token}`).delete(); // idempotent
+    audit(req, "push.token.remove", {});
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Best-effort: never throws into the request path; unregistered tokens are
+// pruned so the registry self-heals. Awaited before responding because Cloud
+// Run throttles CPU after the response is sent.
+async function pushNoteToTrainee(orgId, traineeUid, note) {
+  try {
+    const snap = await db.collection(`users/${traineeUid}/pushTokens`).get();
+    if (snap.empty) return;
+    const text = note.text ?? "";
+    const body = text.length > 120 ? `${text.slice(0, 117)}…` : text;
+    const results = await Promise.allSettled(
+      snap.docs.map((d) =>
+        getMessaging()
+          .send({
+            token: d.id,
+            notification: { title: "New note from your mentor", body },
+            data: { noteId: note.noteId, sessionId: note.sessionId ?? "", orgId },
+            apns: { payload: { aps: { sound: "default" } } },
+          })
+          .catch(async (err) => {
+            if (err?.code === "messaging/registration-token-not-registered") await d.ref.delete();
+            throw err;
+          }),
+      ),
+    );
+    const sent = results.filter((r) => r.status === "fulfilled").length;
+    console.log(JSON.stringify({
+      severity: "INFO", type: "push", action: "note.push",
+      traineeUid, sent, tokens: snap.size,
+      firstError: results.find((r) => r.status === "rejected")?.reason?.code ?? null,
+    }));
+  } catch (err) {
+    console.error("push send failed (non-fatal):", err?.message ?? err);
+  }
+}
 
 // ---------- MC4: rubric editor write (admin only; contract in PLAN.md) ----------
 

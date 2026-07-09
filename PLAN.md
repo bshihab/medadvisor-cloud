@@ -349,15 +349,13 @@ vanilla JS, no framework (polish ≠ rewrite; framework decision stands).
 - **Accept:** Bilal puts dashboard and app side by side and calls them the
   same family; no view renders blank on empty org or slow network.
   (Pending Bilal's eyeball; deployed to dev only, prod held.)
-- [ ] **Unified skill-area visualization** (2026-07-09): each skill area
-      shows a "current level" BAR + a change-over-time SPARKLINE, identical
-      semantics across the app's Progress tab, the native mentor view, and
-      this dashboard. Scoring convention unchanged (met=1, partial=0.5,
-      missed=0, na excluded). The iOS chat publishes the exact visual spec
-      (colors from the blue/indigo/purple family, bar geometry, trend style)
-      in PLAN.md — dashboard mirrors it and this item flips to SETTLED.
-      Meanwhile the dashboard ships the bar+trend structure with our
-      palette as placeholder geometry.
+- [x] **Unified skill-area visualization** (SETTLED 2026-07-09): dashboard
+      drill-in mirrors the iOS spec exactly (see spec section at bottom):
+      one row per skill area — label · capsule bar (10px, faint neutral
+      track, band-colored fill) · monospace percent in the fill color ·
+      smooth 56×20 trend line colored by latest band, omitted-but-spaced
+      under 2 sessions. Bands: <40% #FF3B30 / 40–74% #FF9500 / ≥75%
+      #34C759. Browser-verified on dev.
 
 ## MC6 — Mentor notes, session delete, mentor invites  Status: IN PROGRESS
 Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
@@ -502,9 +500,13 @@ fallback (MC6 semantics unchanged).
       IAM; run via `!` when ready):
       `CLOUDSDK_ACTIVE_CONFIG_NAME=medadvisor gcloud projects add-iam-policy-binding medadvisor-dev --member serviceAccount:medadvisor-api@medadvisor-dev.iam.gserviceaccount.com --role roles/firebasemessaging.admin --condition=None`
       (repeat with medadvisor-production)
-- CLOUD: [ ] token registry endpoints (contract below) — publish early
-- CLOUD: [ ] send push on note create (fire-and-forget; never fails the
-      note request; self-healing token cleanup)
+- CLOUD: [x] token registry endpoints — LIVE ON DEV, contract verified
+      (register/upsert/delete 200, malformed 400, unauthenticated 401)
+- CLOUD: [x] send push on note create — LIVE ON DEV; proven non-fatal:
+      note create returns 200 with a registered token while delivery is
+      impossible (logged `messaging/mismatched-credential`); flips to real
+      delivery once the APNs key + IAM grant land. Unregistered-token
+      cleanup wired. Prod held for the go-ahead batch.
 - iOS:   [ ] permission prompt in context; register FCM token against
       POST /v1/me/push-token; clear on sign-out; tap → deep-link to note
 - **Accept:** mentor writes a note on the web → trainee's phone shows a
@@ -538,8 +540,8 @@ fallback (MC6 semantics unchanged).
 
 ---
 
-## Unified skill-area visualization spec (PROPOSED by iOS chat 2026-07-09 —
-## dashboard chat: mirror it in the drill-in, then flip to SETTLED)
+## Unified skill-area visualization spec (SETTLED 2026-07-09 — mirrored in
+## the dashboard drill-in; live on dev, browser-verified)
 
 One visual language for "progress by skill area" on ALL surfaces (trainee
 Insights, native mentor Cohort tab — both shipped — and the web dashboard):

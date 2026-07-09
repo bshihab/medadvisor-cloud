@@ -50,6 +50,30 @@ const overallScore = (s) => {
 };
 const pct = (x) => (x == null ? "—" : `${Math.round(x * 100)}%`);
 
+// Unified skill-area viz (spec in PLAN.md, SETTLED): band colors + smooth
+// trend, identical on trainee Insights, native mentor tab, and here.
+const bandColor = (x) => (x < 0.4 ? "#FF3B30" : x < 0.75 ? "#FF9500" : "#34C759");
+const bandName = (x) => (x < 0.4 ? "Emerging" : x < 0.75 ? "Developing" : "Proficient");
+
+// Catmull-Rom → bezier smooth sparkline, ~56×20, 2px stroke, colored by the
+// latest value's band. Returns empty-space placeholder under 2 points.
+function trendLine(values, color, w = 56, h = 20) {
+  const pts = values.filter((v) => v != null).map((v, i, arr) => ({
+    x: 2 + (i * (w - 4)) / Math.max(1, arr.length - 1),
+    y: h - 2 - v * (h - 4),
+  }));
+  if (pts.length < 2) return `<span style="display:inline-block;width:${w}px"></span>`;
+  let d = `M ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] ?? p2;
+    d += ` C ${(p1.x + (p2.x - p0.x) / 6).toFixed(1)},${(p1.y + (p2.y - p0.y) / 6).toFixed(1)}` +
+         ` ${(p2.x - (p3.x - p1.x) / 6).toFixed(1)},${(p2.y - (p3.y - p1.y) / 6).toFixed(1)}` +
+         ` ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round"/></svg>`;
+}
+
 function spark(values, w = 110, h = 26) {
   const pts = values.filter((v) => v != null);
   if (pts.length === 0) return '<span class="muted">no data</span>';
@@ -198,11 +222,18 @@ function viewTrainee(uid) {
   const dims = latestRubric?.dimensions ?? [];
   const dimLabel = (id) => dims.find((d) => d.id === id)?.label ?? id;
 
+  // One ROW per skill area: label · bar · percent · trend (spec: PLAN.md
+  // "Unified skill-area visualization", SETTLED — mirrored exactly).
   const trendCells = dims.map((d) => {
     const series = ss.map((s) => dimensionScores(s)[d.id] ?? null);
     const latest = [...series].reverse().find((v) => v != null);
-    return `<div class="dimcell"><div class="muted">${esc(d.label)}</div>${spark(series)}
-      <div>${pct(latest)}</div></div>`;
+    const color = latest != null ? bandColor(latest) : "var(--na)";
+    return `<div class="skillrow" title="${latest != null ? esc(bandName(latest)) : ""}">
+      <span class="muted">${esc(d.label)}</span>
+      <span class="bar"><span style="width:${latest != null ? Math.round(latest * 100) : 0}%;background:${color}"></span></span>
+      <span class="pct" style="color:${latest != null ? color : "var(--muted)"}">${pct(latest)}</span>
+      ${trendLine(series, color)}
+    </div>`;
   }).join("");
 
   // Timeline = session cards + muted retraction lines, newest first.
@@ -248,7 +279,7 @@ function viewTrainee(uid) {
   return `<p><a href="#cohort">← Cohort</a></p>
     <div class="card">
       <h2>${esc(memberName(m))} ${roleBadge(m.role)}</h2>
-      ${ss.length ? `<div class="dimrow" style="margin-top:.6rem">${trendCells}</div>`
+      ${ss.length ? `<div style="margin-top:.7rem">${trendCells}</div>`
                   : '<p class="muted">No shared sessions yet — trends appear once the trainee shares.</p>'}
     </div>
     <div class="card">${notesBlock(uid, null, "General notes")}</div>
