@@ -629,6 +629,24 @@ rebuild carries the MC8 UIs so nothing is built twice.
   General notes (no sessionId) and session-level notes (sessionId, no
   criterionId) behave exactly as before.
 
+  **Delete account (SETTLED 2026-07-10).** Self-service erasure; the same
+  endpoint serves web mentors and app trainees.
+  - `DELETE /v1/me` (Bearer) — deletes ONLY the caller's own account. In one
+    batch: their org membership, the notes + replies THEY authored (root
+    deletion cascades that root's replies), their own sessions and the
+    sessions' retraction markers, their push tokens; then the Identity
+    Platform user itself (Admin SDK). → 200 `{ "deleted": true }`; client
+    signs out.
+  - Owner guard: if the caller CREATED the org and other members remain →
+    409 `{ "error": "owner_has_members" }` (must remove/reassign others
+    first — can't orphan a program with trainees' data). A sole owner
+    deleting takes the now-empty program (org doc + its invite codes) with
+    them.
+  - No-org accounts (signed up, never joined) → just tokens + the auth user.
+  - iOS: [ ] "Delete account" in the app's account/settings — same endpoint,
+    same behavior (trainee is never an owner, so the guard never trips).
+    Consumes this contract; no other changes.
+
   **Trainee-initiated threads (SETTLED 2026-07-10 — "improved chat" brief).**
   Trainees can now START threads about themselves, not just reply:
   - `POST /v1/me/notes` (Bearer; trainee role with org claims — mentors get
