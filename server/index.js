@@ -30,6 +30,8 @@ const limiter = (max, windowMs = 15 * 60_000) =>
 app.use(limiter(600));                        // global: 600 / 15 min / IP
 app.use("/v1/invites/redeem", limiter(20));   // slow invite-code guessing
 app.use("/v1/sessions", limiter(120));
+app.use("/v1/orgs", (req, res, next) =>
+  req.method === "POST" && req.path === "/" ? limiter(5)(req, res, next) : next());
 
 // MC5: application-level audit log — one structured line per sensitive action,
 // picked up by Cloud Logging. Never log payload content (quotes/summaries).
@@ -119,6 +121,39 @@ function requireOrgAdmin(req, res, next) {
 // No I, O, 0, 1 — codes are read aloud / typed from a whiteboard.
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const genCode = () => [...randomBytes(8)].map((b) => CODE_ALPHABET[b % 32]).join("");
+
+// Self-serve program creation (contract in PLAN.md): any org-less account
+// becomes the Mentor of a brand-new, empty program. Joining an EXISTING
+// program as mentor still requires a Mentor code — that's the privacy wall.
+app.post("/v1/orgs", requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.orgId) return res.status(409).json({ error: "already_in_org" });
+    const name = String(req.body?.name ?? "").trim();
+    if (name.length < 1 || name.length > 80) {
+      return res.status(400).json({ error: "invalid_body", detail: "name must be 1-80 chars" });
+    }
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "program";
+    const orgId = `org-${slug}-${randomBytes(3).toString("hex")}`;
+    const batch = db.batch();
+    batch.create(db.doc(`orgs/${orgId}`), {
+      name,
+      createdAt: FieldValue.serverTimestamp(),
+      createdBy: req.user.uid,
+    });
+    batch.create(db.doc(`orgs/${orgId}/members/${req.user.uid}`), {
+      role: "admin",
+      email: req.user.email,
+      displayName: req.user.displayName,
+      joinedAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    await getAuth().setCustomUserClaims(req.user.uid, { orgId, role: "admin" });
+    audit(req, "org.create", { org: orgId, name });
+    res.json({ orgId, name, role: "admin" });
+  } catch (err) {
+    next(err);
+  }
+});
 
 app.post("/v1/invites/redeem", requireAuth, async (req, res, next) => {
   try {

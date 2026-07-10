@@ -22,8 +22,7 @@ export const useStore = () => {
   return s;
 };
 
-export async function loadAll(): Promise<Omit<Store, "refreshNotes" | "refreshInvites" | "refreshRubrics">> {
-  const me = await api<Me>("/v1/me");
+export async function loadAll(me: Me): Promise<Omit<Store, "refreshNotes" | "refreshInvites" | "refreshRubrics">> {
   if (!me.org || me.org.role !== "admin") {
     throw new Error("This account is not a Mentor of any program.");
   }

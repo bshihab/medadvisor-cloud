@@ -3,8 +3,11 @@ import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-do
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { ClipboardList, KeyRound, LogOut, Monitor, Moon, Sun, Users } from "lucide-react";
 import { getAuthOrThrow, initAuth } from "./lib/firebase";
+import { api } from "./lib/api";
+import type { Me } from "./lib/types";
 import { loadAll, StoreProvider, useStore } from "./store";
 import { Login } from "./pages/Login";
+import { OrgGate } from "./pages/OrgGate";
 import { People } from "./pages/People";
 import { Invites } from "./pages/Invites";
 import { PersonLayout, PersonSessions, PersonSummary } from "./pages/Person";
@@ -182,6 +185,8 @@ type Phase =
   | { kind: "boot" }
   | { kind: "signedOut" }
   | { kind: "loading" }
+  | { kind: "noOrg"; me: Me }
+  | { kind: "traineeAccount" }
   | { kind: "error"; message: string }
   | { kind: "ready"; data: Awaited<ReturnType<typeof loadAll>> };
 
@@ -196,7 +201,11 @@ export default function App() {
         if (!user) return setPhase({ kind: "signedOut" });
         setPhase({ kind: "loading" });
         try {
-          const data = await loadAll();
+          const me = await api<Me>("/v1/me");
+          if (cancelled) return;
+          if (!me.org) return setPhase({ kind: "noOrg", me });
+          if (me.org.role !== "admin") return setPhase({ kind: "traineeAccount" });
+          const data = await loadAll(me);
           if (!cancelled) setPhase({ kind: "ready", data });
         } catch (e) {
           if (!cancelled)
@@ -215,6 +224,22 @@ export default function App() {
   if (phase.kind === "boot") return <Spinner label="Loading…" />;
   if (phase.kind === "signedOut") return <Login />;
   if (phase.kind === "loading") return <Spinner label="Loading your program…" />;
+  if (phase.kind === "noOrg") return <OrgGate me={phase.me} />;
+  if (phase.kind === "traineeAccount")
+    return (
+      <div className="mx-auto max-w-md px-4 pt-24">
+        <Card className="text-center">
+          <div className="mb-2 text-3xl">📱</div>
+          <p className="mb-4">
+            This account is a Trainee — trainees use the MedAdvisor iPhone app. This dashboard is
+            for Mentors.
+          </p>
+          <Button variant="outline" onClick={() => signOut(getAuthOrThrow())}>
+            Sign out
+          </Button>
+        </Card>
+      </div>
+    );
   if (phase.kind === "error")
     return (
       <div className="mx-auto max-w-md px-4 pt-24">

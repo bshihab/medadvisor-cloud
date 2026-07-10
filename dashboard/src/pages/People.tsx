@@ -16,7 +16,14 @@ export function People() {
   const navigate = useNavigate();
 
   // Cohort average per skill: mean of each trainee's LATEST non-null score.
-  const dims = rubrics[0]?.rubric.dimensions ?? [];
+  // Labels come from the rubric the cohort actually uses (majority of
+  // sessions), not rubrics[0] — dimension ids overlap across rubrics but
+  // their labels differ (e.g. inpatient's "Opening (Greeting)").
+  const counts = new Map<string, number>();
+  for (const s of sessions) counts.set(s.rubricId, (counts.get(s.rubricId) ?? 0) + 1);
+  const topRubricId = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const dims =
+    (rubrics.find((r) => r.id === topRubricId) ?? rubrics[0])?.rubric.dimensions ?? [];
   const cohort = dims.map((d) => {
     const latest = members
       .map((m) => {

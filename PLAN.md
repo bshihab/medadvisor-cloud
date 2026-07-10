@@ -424,7 +424,9 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
     Caller already in an org → 409 `{ "error": "already_in_org" }`.
     Bad name → 400 `invalid_body`. Rate-limited (5 creations / 15 min / IP).
     `orgId` is server-generated (slug + random suffix) — never client-chosen.
-  - WEB: an org-less account signing into the dashboard now gets a choice
+  - WEB: [x] LIVE ON DEV, verified end-to-end in a browser (fresh account
+    → gate → created "Cardiology Fellowship" → landed in its own mentor
+    console; 409 on second create). An org-less account gets a choice
     screen instead of a dead end: "Create a program" (name → this endpoint)
     or "I have an invite code" (existing `POST /v1/invites/redeem`; a
     Mentor code joins an existing program as co-mentor). Accounts whose
