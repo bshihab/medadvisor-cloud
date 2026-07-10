@@ -3,7 +3,6 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { RoleBadge } from "@/components/ui/badge";
 import { SkillRows } from "@/components/SkillRows";
 import { SessionCard } from "@/components/SessionCard";
-import { NotesPanel } from "@/components/Thread";
 import { fmtDay } from "@/lib/scoring";
 import { memberName, sessionsOf, useStore } from "@/store";
 import { cn } from "@/lib/utils";
@@ -48,8 +47,11 @@ export function PersonLayout() {
           <NavLink to={`/person/${uid}`} end className={tab}>
             Summary
           </NavLink>
+          <NavLink to={`/person/${uid}/chat`} className={tab}>
+            Chat
+          </NavLink>
           <NavLink to={`/person/${uid}/sessions`} className={tab}>
-            Sessions & Conversations
+            Sessions
           </NavLink>
         </div>
       </div>
@@ -78,7 +80,7 @@ export function PersonSummary() {
 }
 
 export function PersonSessions() {
-  const { uid, ss, latestRubric, retractions } = usePerson();
+  const { ss, latestRubric, retractions } = usePerson();
   const { rubrics } = useStore();
   const timeline = [
     ...ss.map((s) => ({ at: s.recordedAt ?? "", kind: "session" as const, s })),
@@ -86,10 +88,6 @@ export function PersonSessions() {
   ].sort((a, b) => b.at.localeCompare(a.at));
   return (
     <div className="space-y-4">
-      <Card>
-        <CardTitle>General notes</CardTitle>
-        <NotesPanel traineeUid={uid} placeholder={`Write a general note…`} />
-      </Card>
       {timeline.length === 0 && (
         <Card>
           <p className="py-4 text-center text-sm text-muted">

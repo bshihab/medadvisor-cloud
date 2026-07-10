@@ -11,6 +11,7 @@ import { OrgGate } from "./pages/OrgGate";
 import { People } from "./pages/People";
 import { Invites } from "./pages/Invites";
 import { PersonLayout, PersonSessions, PersonSummary } from "./pages/Person";
+import { PersonChat } from "./pages/PersonChat";
 import { Rubrics, RubricEditor } from "./pages/Rubrics";
 import { Button } from "./components/ui/button";
 import { Card } from "./components/ui/card";
@@ -167,6 +168,7 @@ function Shell() {
               <Route path="/invites" element={<Invites />} />
               <Route path="/person/:uid" element={<PersonLayout />}>
                 <Route index element={<PersonSummary />} />
+                <Route path="chat" element={<PersonChat />} />
                 <Route path="sessions" element={<PersonSessions />} />
               </Route>
               <Route path="/person/:uid/skill/:dimId" element={<SkillDetail />} />

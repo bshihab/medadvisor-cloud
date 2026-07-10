@@ -543,6 +543,79 @@ app.post("/v1/orgs/:orgId/notes", requireAuth, requireOrgAdmin, async (req, res,
   }
 });
 
+// Trainee-initiated threads (contract in PLAN.md): a trainee starts a
+// thread about THEMSELVES — anchors resolve in their own namespace.
+const ME_NOTE_KEYS = new Set(["sessionId", "criterionId", "text"]);
+
+app.post("/v1/me/notes", requireAuth, async (req, res, next) => {
+  try {
+    if (!req.user.orgId) return res.status(403).json({ error: "forbidden" });
+    if (req.user.role === "admin") {
+      return res.status(403).json({ error: "forbidden", detail: "mentors use POST /v1/orgs/:orgId/notes" });
+    }
+    const b = req.body;
+    const bad = (detail) => res.status(400).json({ error: "invalid_body", detail });
+    if (typeof b !== "object" || b === null || Array.isArray(b)) return bad("body must be a JSON object");
+    const unknown = Object.keys(b).filter((k) => !ME_NOTE_KEYS.has(k));
+    if (unknown.length) return bad(`unknown keys: ${unknown.join(", ")}`);
+    if (b.sessionId != null && (typeof b.sessionId !== "string" || !b.sessionId))
+      return bad("sessionId must be a non-empty string when present");
+    if (b.criterionId != null && (typeof b.criterionId !== "string" || !b.criterionId))
+      return bad("criterionId must be a non-empty string when present");
+    if (b.criterionId && !b.sessionId) return bad("criterionId requires sessionId");
+    const textErr = noteTextError(b.text);
+    if (textErr) return bad(textErr);
+
+    if (b.sessionId) {
+      const sess = await db.doc(`orgs/${req.user.orgId}/sessions/${b.sessionId}`).get();
+      if (!sess.exists || sess.get("uid") !== req.user.uid)
+        return bad("sessionId does not exist or isn't one of your sessions");
+      if (b.criterionId && !(sess.get("criteria") ?? []).some((c) => c.id === b.criterionId))
+        return bad("criterionId is not present in that session's criteria");
+    }
+
+    const ref = db.collection(`orgs/${req.user.orgId}/notes`).doc();
+    await ref.set({
+      orgId: req.user.orgId,
+      traineeUid: req.user.uid,
+      sessionId: b.sessionId ?? null,
+      criterionId: b.criterionId ?? null,
+      parentNoteId: null,
+      authorUid: req.user.uid,
+      authorEmail: req.user.email,
+      authorDisplayName: req.user.displayName,
+      authorRole: "trainee",
+      text: b.text,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    audit(req, "note.create", {
+      org: req.user.orgId, noteId: ref.id, traineeUid: req.user.uid,
+      sessionId: b.sessionId ?? null, criterionId: b.criterionId ?? null, authorRole: "trainee",
+    });
+
+    // Notify the program's mentors (MC9 assignments will narrow this).
+    const mentors = await db
+      .collection(`orgs/${req.user.orgId}/members`)
+      .where("role", "==", "admin")
+      .get();
+    await Promise.all(
+      mentors.docs.map((d) =>
+        sendPushToUser(d.id, "New message from your trainee", b.text, {
+          noteId: ref.id, sessionId: b.sessionId ?? "", orgId: req.user.orgId,
+        }),
+      ),
+    );
+
+    const item = toNoteItem(await ref.get());
+    delete item.parentNoteId;
+    item.replies = [];
+    res.json(item);
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.patch("/v1/orgs/:orgId/notes/:noteId", requireAuth, requireOrgAdmin, async (req, res, next) => {
   try {
     const b = req.body;

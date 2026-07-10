@@ -646,10 +646,15 @@ rebuild carries the MC8 UIs so nothing is built twice.
     audience later.)
   - iOS: this unlocks the trainee composer and the "Ask about this"
     session/criterion-anchored buttons.
-  - DASH: the web renders conversations as a CHAT view per trainee
-    (Messages-style bubbles by authorRole, day separators, anchor chips
-    that jump to the session/criterion, pinned composer; the drill-in's
-    per-criterion 💬 prefills the chat composer's anchor).
+  - DASH: [x] LIVE ON DEV, browser-verified (bubbles both sides with real
+    trainee-authored threads, day separators, anchor-chip jump, send,
+    hover edit/delete on own bubbles). Person tabs are now
+    Summary | Chat | Sessions; the old list-style notes panels were
+    retired — Chat is the conversation surface, and the drill-in's
+    per-criterion 💬 / per-session Discuss prefill the composer's anchor.
+  - CLOUD: [x] POST /v1/me/notes LIVE ON DEV, verified (trainee general +
+    criterion-anchored roots, foreign-session 400, mentor 403,
+    mentor-notify push wired). Prod held for the go-ahead batch.
 
   **Threaded replies.** Single-level threads: replies attach to a ROOT
   note only (replying to a reply is a 400 — thread stays flat and
