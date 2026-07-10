@@ -629,6 +629,28 @@ rebuild carries the MC8 UIs so nothing is built twice.
   General notes (no sessionId) and session-level notes (sessionId, no
   criterionId) behave exactly as before.
 
+  **Trainee-initiated threads (SETTLED 2026-07-10 — "improved chat" brief).**
+  Trainees can now START threads about themselves, not just reply:
+  - `POST /v1/me/notes` (Bearer; trainee role with org claims — mentors get
+    403 and keep using the org endpoint) body
+    `{ "sessionId"?, "criterionId"?, "text" }` — same validation as mentor
+    notes except `traineeUid` is implicitly the caller and anchors resolve
+    in THEIR namespace: `sessionId` must be one of the caller's own
+    sessions (else 400), `criterionId` requires it and must exist in that
+    session's criteria. → 200 the standard note item
+    (`authorRole: "trainee"`, `replies: []`). Reads are UNCHANGED — trainee
+    roots ride the same `GET /v1/me/notes` / org-notes threads.
+  - Push: a trainee root notifies ALL the org's mentors ("New message from
+    your trainee", preview, data `{noteId, sessionId, orgId}`) — MC7
+    sender, best-effort as always. (MC9 assignments will narrow the
+    audience later.)
+  - iOS: this unlocks the trainee composer and the "Ask about this"
+    session/criterion-anchored buttons.
+  - DASH: the web renders conversations as a CHAT view per trainee
+    (Messages-style bubbles by authorRole, day separators, anchor chips
+    that jump to the session/criterion, pinned composer; the drill-in's
+    per-criterion 💬 prefills the chat composer's anchor).
+
   **Threaded replies.** Single-level threads: replies attach to a ROOT
   note only (replying to a reply is a 400 — thread stays flat and
   chronological). Note items in every read gain
