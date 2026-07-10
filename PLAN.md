@@ -429,7 +429,10 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
     console; 409 on second create). An org-less account gets a choice
     screen instead of a dead end: "Create a program" (name → this endpoint)
     or "I have an invite code" (existing `POST /v1/invites/redeem`; a
-    Mentor code joins an existing program as co-mentor). Accounts whose
+    Mentor code joins an existing program as co-mentor). The web login
+    card also gained a "Create an account" toggle (email/password sign-up
+    — Google/Apple already auto-create on first sign-in), completing the
+    self-serve path for email-only mentors. Accounts whose
     role is trainee still get a "this dashboard is for mentors" message.
   - iOS: [ ] the app mirrors the same gate for org-less signed-in users:
     "Create a program" (this endpoint) alongside the existing "Join my

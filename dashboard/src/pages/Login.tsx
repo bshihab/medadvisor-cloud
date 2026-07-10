@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  createUserWithEmailAndPassword,
   GoogleAuthProvider,
   OAuthProvider,
   signInWithEmailAndPassword,
@@ -17,9 +18,12 @@ const LOGIN_ERRORS: Record<string, string> = {
   "auth/too-many-requests": "Too many attempts — wait a few minutes and try again.",
   "auth/network-request-failed": "Network problem — check your connection.",
   "auth/operation-not-allowed": "Google sign-in isn't enabled for this environment.",
+  "auth/email-already-in-use": "You already have an account with this email — sign in instead.",
+  "auth/weak-password": "Password needs at least 6 characters.",
 };
 
 export function Login() {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
@@ -46,7 +50,11 @@ export function Login() {
             setErr("");
             setBusy(true);
             try {
-              await signInWithEmailAndPassword(getAuthOrThrow(), email, password);
+              if (mode === "signup") {
+                await createUserWithEmailAndPassword(getAuthOrThrow(), email, password);
+              } else {
+                await signInWithEmailAndPassword(getAuthOrThrow(), email, password);
+              }
             } catch (ex) {
               fail(ex);
             } finally {
@@ -71,8 +79,20 @@ export function Login() {
             required
           />
           <Button type="submit" disabled={busy}>
-            {busy ? "Signing in…" : "Sign in"}
+            {busy ? "Working…" : mode === "signup" ? "Create account" : "Sign in"}
           </Button>
+          <button
+            type="button"
+            className="cursor-pointer text-center text-xs text-muted underline"
+            onClick={() => {
+              setErr("");
+              setMode((m) => (m === "signin" ? "signup" : "signin"));
+            }}
+          >
+            {mode === "signin"
+              ? "New here? Create an account"
+              : "Already have an account? Sign in"}
+          </button>
         </form>
         <div className="my-4 flex items-center gap-3 text-xs text-muted">
           <span className="h-px flex-1 bg-line" />
