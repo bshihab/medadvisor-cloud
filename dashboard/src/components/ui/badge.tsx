@@ -1,11 +1,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export function Badge({
-  className,
-  style,
-  ...props
-}: React.HTMLAttributes<HTMLSpanElement>) {
+export function Badge({ className, style, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
   return (
     <span
       className={cn(
@@ -20,7 +16,7 @@ export function Badge({
 
 export const RoleBadge = ({ role }: { role: "admin" | "trainee" }) =>
   role === "admin" ? (
-    <Badge className="bg-gradient-to-br from-brand-indigo to-brand-purple">Mentor</Badge>
+    <Badge className="bg-accent">Mentor</Badge>
   ) : (
     <Badge className="bg-muted">Trainee</Badge>
   );

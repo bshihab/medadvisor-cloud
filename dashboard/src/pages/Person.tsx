@@ -26,7 +26,7 @@ export function PersonLayout() {
     return (
       <Card>
         <p>
-          Unknown member. <Link className="text-brand-indigo underline" to="/">Back to people</Link>
+          Unknown member. <Link className="text-accent underline" to="/">Back to people</Link>
         </p>
       </Card>
     );
@@ -34,15 +34,15 @@ export function PersonLayout() {
   const tab = ({ isActive }: { isActive: boolean }) =>
     cn(
       "rounded-full px-4 py-1.5 text-sm",
-      isActive ? "bg-brand-indigo/15 font-semibold text-brand-indigo" : "hover:bg-brand-indigo/10",
+      isActive ? "bg-accent/15 font-semibold text-accent" : "hover:bg-accent/10",
     );
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <Link to="/" className="text-sm text-brand-indigo hover:underline">
+        <Link to="/" className="text-sm text-accent hover:underline">
           ← People
         </Link>
-        <h1 className="text-lg font-semibold">{memberName(member)}</h1>
+        <h1 className="text-[22px] font-bold tracking-[-0.02em]">{memberName(member)}</h1>
         <RoleBadge role={member.role} />
         <div className="ml-auto flex gap-1 rounded-full border border-line bg-card p-1">
           <NavLink to={`/person/${uid}`} end className={tab}>

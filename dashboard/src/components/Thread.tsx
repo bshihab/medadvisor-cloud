@@ -70,7 +70,7 @@ function Entry({
   return (
     <div className="border-t border-line py-2 first:border-t-0">
       <div className="text-xs text-muted">
-        <span className={authorRole === "admin" ? "font-medium text-brand-indigo" : ""}>
+        <span className={authorRole === "admin" ? "font-medium text-accent" : ""}>
           {roleLabel(authorRole)}
         </span>{" "}
         · {authorEmail ?? "—"} · {fmtDay(createdAt)}
@@ -133,7 +133,7 @@ export function Thread({ note }: { note: Note }) {
   const org = me.org!.orgId;
   const base = `/v1/orgs/${org}/notes/${note.noteId}`;
   return (
-    <div className="rounded-xl border border-line bg-background/60 px-3 py-1.5">
+    <div className="rounded-xl border border-line bg-inset px-3 py-1.5">
       <Entry
         {...note}
         mine={note.authorUid === me.uid}
@@ -147,7 +147,7 @@ export function Thread({ note }: { note: Note }) {
         }}
       />
       {note.replies.length > 0 && (
-        <div className="ml-4 border-l-2 border-brand-indigo/30 pl-3">
+        <div className="ml-4 border-l-2 border-accent/30 pl-3">
           {note.replies.map((r: Reply) => (
             <Entry
               key={r.replyId}

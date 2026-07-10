@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { fmtDay, roleLabel } from "@/lib/scoring";
 import { useStore } from "@/store";
 import type { Invite } from "@/lib/types";
-import { Card, CardTitle } from "./ui/card";
+import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Select } from "./ui/input";
 
@@ -42,21 +42,16 @@ export function InvitesCard() {
 
   return (
     <Card>
-      <CardTitle>Invite codes</CardTitle>
-      <p className="text-sm text-muted">
-        Codes people type in the app under "Join my program". Each code grants ONE role; a code
-        isn't used up until someone redeems it.
-      </p>
-      <div className="mt-2 divide-y divide-line">
+      <div className="divide-y divide-rowline">
         {invites.length === 0 && <p className="py-2 text-sm text-muted">No active codes yet.</p>}
         {invites.map((i) => (
           <div key={i.code} className="flex flex-wrap items-center gap-3 py-2">
-            <code className="rounded-md bg-brand-indigo/10 px-2 py-0.5 font-mono text-sm tracking-widest">
+            <code className="rounded-md bg-accent/10 px-2 py-0.5 font-mono text-sm tracking-widest">
               {i.code}
             </code>
             <span
               className={
-                i.role === "admin" ? "text-sm font-medium text-brand-purple" : "text-sm text-muted"
+                i.role === "admin" ? "text-sm font-medium text-teal" : "text-sm text-muted"
               }
             >
               {describe(i)}
@@ -65,12 +60,12 @@ export function InvitesCard() {
           </div>
         ))}
       </div>
-      <div className="mt-4 border-t-2 border-line pt-3">
+      <div className="mt-4 border-t border-rowline pt-3.5">
         <div className="text-sm font-semibold">Create a new code</div>
         {fresh && (
           <p className="my-2 text-sm text-band-high">
             Created — {roleLabel(fresh.role)} code{" "}
-            <code className="rounded-md bg-brand-indigo/10 px-2 py-0.5 font-mono tracking-widest">
+            <code className="rounded-md bg-accent/10 px-2 py-0.5 font-mono tracking-widest">
               {fresh.code}
             </code>{" "}
             <CopyButton code={fresh.code} /> · expires {fmtDay(fresh.expiresAt)}

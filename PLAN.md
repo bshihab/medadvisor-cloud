@@ -683,6 +683,15 @@ Insights, native mentor Cohort tab — both shipped — and the web dashboard):
   trainees often live in institutional Google accounts). Apple button keeps
   ≥ equal prominence per App Review 4.8. Same-email sign-ins link to one
   account, so no membership migration is needed.
+- 2026-07-09 **Dashboard theme: "Ambient glass" v2** (design handoff from
+  Bilal, owner-approved from a 3-way exploration; implemented same day).
+  Replaces the indigo/purple-gradient look: frosted-glass cards over
+  teal→blue ambient glows, glass sidebar console (People/Rubrics/Invite
+  codes + footer with theme toggle), ONE blue accent (no gradients),
+  explicit system/light/dark toggle (`ma-theme`, pre-paint script),
+  redesigned rubric editor (collapsible skill areas, weight steppers,
+  auto version bump on save, raw JSON demoted), purposeful gated motion.
+  Band colors unchanged in both themes.
 - 2026-07-09 **MC8: person-first dashboard on React (AMENDS "dashboard
   framework: none").** The vanilla SPA served MC4 well but the surface
   outgrew it (threads, per-criterion feedback, detail charts). Rebuild on

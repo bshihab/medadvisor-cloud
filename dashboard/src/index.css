@@ -1,32 +1,95 @@
 @import "tailwindcss";
 
-/* MedAdvisor ambient theme — blue/indigo/purple family, light + dark,
-   matching the iOS app's feel (MC4.5 direction carried forward). */
+/* MedAdvisor "Ambient glass" theme (design_handoff_ambient_glass_v2) —
+   one blue + teal, frosted glass, teal→blue ambient glows. Light + dark;
+   band colors identical in both. */
 @theme {
-  --color-background: #f6f5fb;
-  --color-card: #ffffff;
-  --color-ink: #1e1b2e;
-  --color-muted: #6b6885;
-  --color-line: #e4e2f0;
-  --color-brand-blue: #3b82f6;
-  --color-brand-indigo: #6366f1;
-  --color-brand-purple: #8b5cf6;
+  --color-background: #edf1f8;
+  --color-ink: #16233c;
+  --color-muted: #5b6b85;
+  --color-faint: #9aa8bf;
+  --color-accent: #0a6cff;
+  --color-teal: #12aabf;
   --color-band-low: #ff3b30;
   --color-band-mid: #ff9500;
   --color-band-high: #34c759;
+  /* glass surfaces (rgba on purpose — they frost over the glows) */
+  --color-card: rgb(255 255 255 / 0.62);
+  --color-line: rgb(255 255 255 / 0.75);
+  --color-inset: rgb(255 255 255 / 0.5);
+  --color-field: rgb(255 255 255 / 0.55);
+  --color-track: rgb(22 35 60 / 0.09);
+  --color-rowline: rgb(22 35 60 / 0.07);
+  --color-hoverfill: rgb(22 35 60 / 0.05);
+  --color-chip: rgb(22 35 60 / 0.07);
 }
 
+/* Non-utility vars (used by the component classes below) */
+:root {
+  --hairline: rgb(255 255 255 / 0.95);
+  --side-bg: rgb(255 255 255 / 0.55);
+  --side-line: rgb(255 255 255 / 0.65);
+  --glow-a: rgb(18 170 191 / 0.28); /* teal, top-left */
+  --glow-b: rgb(10 108 255 / 0.24); /* blue, bottom-right */
+  --accent-glow: rgb(10 108 255 / 0.32);
+  --shadow-card: 0 12px 34px rgb(30 45 80 / 0.1);
+}
+
+/* DARK — via OS preference… */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: #14121f;
-    --color-card: #1e1b2e;
-    --color-ink: #edecf6;
-    --color-muted: #a5a3bd;
-    --color-line: #322e4a;
+  :root:not([data-theme="light"]) {
+    --color-background: #0a1120;
+    --color-ink: #eaf1fb;
+    --color-muted: #93a3bd;
+    --color-faint: #55647e;
+    --color-accent: #3d9bff;
+    --color-teal: #35d0e4;
+    --color-card: rgb(20 32 56 / 0.52);
+    --color-line: rgb(255 255 255 / 0.1);
+    --color-inset: rgb(255 255 255 / 0.05);
+    --color-field: rgb(255 255 255 / 0.07);
+    --color-track: rgb(255 255 255 / 0.1);
+    --color-rowline: rgb(255 255 255 / 0.07);
+    --color-hoverfill: rgb(255 255 255 / 0.06);
+    --color-chip: rgb(255 255 255 / 0.09);
+    --hairline: rgb(255 255 255 / 0.22);
+    --side-bg: rgb(13 22 40 / 0.55);
+    --side-line: rgb(255 255 255 / 0.08);
+    --glow-a: rgb(23 196 222 / 0.26);
+    --glow-b: rgb(20 110 255 / 0.3);
+    --accent-glow: rgb(61 155 255 / 0.38);
+    --shadow-card: 0 16px 44px rgb(0 0 0 / 0.42);
   }
 }
 
-html { color-scheme: light dark; }
+/* …and via the explicit toggle (same 18-var dark set) */
+[data-theme="dark"] {
+  --color-background: #0a1120;
+  --color-ink: #eaf1fb;
+  --color-muted: #93a3bd;
+  --color-faint: #55647e;
+  --color-accent: #3d9bff;
+  --color-teal: #35d0e4;
+  --color-card: rgb(20 32 56 / 0.52);
+  --color-line: rgb(255 255 255 / 0.1);
+  --color-inset: rgb(255 255 255 / 0.05);
+  --color-field: rgb(255 255 255 / 0.07);
+  --color-track: rgb(255 255 255 / 0.1);
+  --color-rowline: rgb(255 255 255 / 0.07);
+  --color-hoverfill: rgb(255 255 255 / 0.06);
+  --color-chip: rgb(255 255 255 / 0.09);
+  --hairline: rgb(255 255 255 / 0.22);
+  --side-bg: rgb(13 22 40 / 0.55);
+  --side-line: rgb(255 255 255 / 0.08);
+  --glow-a: rgb(23 196 222 / 0.26);
+  --glow-b: rgb(20 110 255 / 0.3);
+  --accent-glow: rgb(61 155 255 / 0.38);
+  --shadow-card: 0 16px 44px rgb(0 0 0 / 0.42);
+}
+
+html {
+  color-scheme: light dark;
+}
 
 body {
   background-color: var(--color-background);
@@ -35,6 +98,7 @@ body {
   min-height: 100vh;
 }
 
+/* Ambient glows: teal top-left, blue bottom-right */
 body::before {
   content: "";
   position: fixed;
@@ -42,7 +106,54 @@ body::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(600px 400px at 8% -5%, rgb(59 130 246 / 0.14), transparent 70%),
-    radial-gradient(700px 500px at 105% 15%, rgb(139 92 246 / 0.13), transparent 70%),
-    radial-gradient(500px 400px at 50% 110%, rgb(99 102 241 / 0.1), transparent 70%);
+    radial-gradient(760px 560px at 6% -8%, var(--glow-a), transparent 72%),
+    radial-gradient(900px 640px at 104% 108%, var(--glow-b), transparent 72%);
+}
+
+/* Component classes (Tailwind can't express these compactly) */
+.glass-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 var(--hairline),
+    var(--shadow-card);
+}
+.glass-side {
+  background: var(--side-bg);
+  border-right: 1px solid var(--side-line);
+  backdrop-filter: blur(26px) saturate(160%);
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+}
+.btn-glow {
+  box-shadow: 0 8px 22px var(--accent-glow);
+}
+
+/* Motion (all gated) */
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .spark path {
+    stroke-dasharray: 130;
+    stroke-dashoffset: 130;
+    animation: draw 0.9s ease-out 0.3s forwards;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
 }

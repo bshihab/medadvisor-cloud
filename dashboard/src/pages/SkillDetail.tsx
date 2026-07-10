@@ -36,7 +36,7 @@ export function SkillDetail() {
 
   return (
     <div className="space-y-4">
-      <Link to={`/person/${uid}`} className="text-sm text-brand-indigo hover:underline">
+      <Link to={`/person/${uid}`} className="text-sm text-accent hover:underline">
         ← {memberName(member)}
       </Link>
       <Card>

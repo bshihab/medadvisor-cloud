@@ -38,7 +38,7 @@ function CriterionRow({
         <ResultBadge result={result} />
         <span className="flex-1">{prompt}</span>
         <button
-          className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-1.5 py-0.5 text-xs text-muted hover:bg-brand-indigo/10 hover:text-brand-indigo"
+          className="inline-flex cursor-pointer items-center gap-1 rounded-lg px-1.5 py-0.5 text-xs text-muted hover:bg-accent/10 hover:text-accent"
           onClick={() => setOpen((o) => !o)}
           title={`Comment on this criterion (${dimensionLabel})`}
         >
@@ -47,7 +47,7 @@ function CriterionRow({
         </button>
       </div>
       {evidence && (
-        <blockquote className="my-1 ml-1 border-l-2 border-brand-indigo pl-2 text-sm italic text-muted">
+        <blockquote className="my-1 ml-1 border-l-2 border-accent pl-2 text-sm italic text-muted">
           “{evidence}”
         </blockquote>
       )}

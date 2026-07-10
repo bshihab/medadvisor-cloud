@@ -32,8 +32,8 @@ export function Login() {
 
   return (
     <div className="grid min-h-screen place-items-center p-4">
-      <div className="w-full max-w-sm rounded-3xl border border-line bg-card p-8 text-center shadow-[0_1px_2px_rgb(30_27_46/0.05),0_8px_24px_-12px_rgb(99_102_241/0.25)]">
-        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-brand-blue via-brand-indigo to-brand-purple text-2xl font-bold text-white">
+      <div className="glass-card w-full max-w-sm !rounded-3xl p-8 text-center">
+        <div className="btn-glow mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-accent text-2xl font-bold text-white">
           M
         </div>
         <h1 className="text-xl font-semibold">MedAdvisor</h1>

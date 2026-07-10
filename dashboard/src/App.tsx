@@ -1,14 +1,17 @@
-import { lazy, Suspense, useEffect, useState } from "react";
-import { HashRouter, Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import { ClipboardList, KeyRound, LogOut, Monitor, Moon, Sun, Users } from "lucide-react";
 import { getAuthOrThrow, initAuth } from "./lib/firebase";
 import { loadAll, StoreProvider, useStore } from "./store";
 import { Login } from "./pages/Login";
 import { People } from "./pages/People";
+import { Invites } from "./pages/Invites";
 import { PersonLayout, PersonSessions, PersonSummary } from "./pages/Person";
 import { Rubrics, RubricEditor } from "./pages/Rubrics";
 import { Button } from "./components/ui/button";
 import { Card } from "./components/ui/card";
+import { Avatar } from "./components/Avatar";
 import { cn } from "./lib/utils";
 
 // Recharts is the heaviest dep — only the skill-detail route pays for it.
@@ -20,65 +23,157 @@ function Spinner({ label }: { label: string }) {
   return (
     <div className="grid min-h-[40vh] place-items-center text-muted">
       <div className="text-center">
-        <div className="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-[3px] border-line border-t-brand-indigo" />
+        <div className="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-[3px] border-line border-t-accent" />
         {label}
       </div>
     </div>
   );
 }
 
+type Theme = "system" | "light" | "dark";
+const NEXT_THEME: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState<Theme>(
+    () => (localStorage.getItem("ma-theme") as Theme) || "system",
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "system") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", theme);
+    localStorage.setItem("ma-theme", theme);
+  }, [theme]);
+  const Icon = { system: Monitor, light: Sun, dark: Moon }[theme];
+  return (
+    <button
+      title={`Theme: ${theme} (click to change)`}
+      onClick={() => setTheme(NEXT_THEME[theme])}
+      className="grid h-[30px] w-[30px] cursor-pointer place-items-center rounded-lg text-muted transition-colors hover:bg-hoverfill hover:text-ink"
+    >
+      <Icon size={18} />
+    </button>
+  );
+}
+
+function SideNavItem({
+  to,
+  end,
+  icon: Icon,
+  label,
+  count,
+}: {
+  to: string;
+  end?: boolean;
+  icon: typeof Users;
+  label: string;
+  count?: number;
+}) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        cn(
+          "flex items-center gap-[11px] rounded-xl px-3 py-[9px] text-[14.5px] transition-colors",
+          isActive
+            ? "bg-accent/15 font-semibold text-accent"
+            : "font-medium text-muted hover:bg-hoverfill",
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          <Icon size={18} className="flex-none" />
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+          {count != null && (
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[11.5px] font-semibold tabular-nums",
+                isActive ? "bg-accent text-white" : "bg-chip text-muted",
+              )}
+            >
+              {count}
+            </span>
+          )}
+        </>
+      )}
+    </NavLink>
+  );
+}
+
 function Shell() {
-  const { me } = useStore();
+  const { me, members } = useStore();
   const location = useLocation();
-  // Skill-detail point clicks pass a scroll target through router state.
+  const mainRef = useRef<HTMLElement>(null);
+
+  // Skill-detail point clicks pass a scroll target through router state;
+  // otherwise each route change scrolls the console pane back to the top.
   useEffect(() => {
     const target = (location.state as { scrollTo?: string } | null)?.scrollTo;
     if (target) {
-      setTimeout(() => document.getElementById(target)?.scrollIntoView({ behavior: "smooth" }), 80);
+      setTimeout(
+        () => document.getElementById(target)?.scrollIntoView({ behavior: "smooth" }),
+        80,
+      );
+    } else {
+      mainRef.current?.scrollTo({ top: 0 });
     }
   }, [location]);
 
-  const tab = ({ isActive }: { isActive: boolean }) =>
-    cn(
-      "rounded-full px-3.5 py-1.5 text-sm",
-      isActive ? "bg-brand-indigo/15 font-semibold text-brand-indigo" : "hover:bg-brand-indigo/10",
-    );
-
   return (
-    <div className="mx-auto max-w-4xl px-4 pb-16 pt-5">
-      <nav className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-card px-4 py-2.5 shadow-[0_1px_2px_rgb(30_27_46/0.05),0_8px_24px_-12px_rgb(99_102_241/0.25)]">
-        <Link to="/" className="mr-2 flex items-center gap-2 font-bold">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-blue via-brand-indigo to-brand-purple text-sm text-white">
+    <div className="flex h-screen overflow-hidden">
+      <aside className="glass-side flex w-[248px] flex-none flex-col p-[14px] pt-5">
+        <div className="flex items-center gap-[11px] px-2 pb-[18px]">
+          <span className="btn-glow grid h-[34px] w-[34px] place-items-center rounded-lg bg-accent text-base font-extrabold text-white">
             M
           </span>
-          MedAdvisor
-        </Link>
-        <NavLink to="/" end className={tab}>
-          People
-        </NavLink>
-        <NavLink to="/rubrics" className={tab}>
-          Rubrics
-        </NavLink>
-        <span className="ml-auto hidden text-xs text-muted sm:inline">
-          {me.email} · {me.org!.name} · Mentor
-        </span>
-        <Button size="sm" variant="outline" onClick={() => signOut(getAuthOrThrow())}>
-          Sign out
-        </Button>
-      </nav>
-      <Suspense fallback={<Spinner label="Loading…" />}>
-        <Routes>
-          <Route path="/" element={<People />} />
-          <Route path="/person/:uid" element={<PersonLayout />}>
-            <Route index element={<PersonSummary />} />
-            <Route path="sessions" element={<PersonSessions />} />
-          </Route>
-          <Route path="/person/:uid/skill/:dimId" element={<SkillDetail />} />
-          <Route path="/rubrics" element={<Rubrics />} />
-          <Route path="/rubrics/:rubricId" element={<RubricEditor />} />
-          <Route path="*" element={<People />} />
-        </Routes>
-      </Suspense>
+          <div>
+            <b className="block text-[16.5px] tracking-[-0.01em]">MedAdvisor</b>
+            <small className="mt-px block text-[11.5px] text-muted">Mentor console</small>
+          </div>
+        </div>
+        <nav className="flex flex-1 flex-col gap-[3px] overflow-y-auto">
+          <SideNavItem to="/" end icon={Users} label="People" count={members.length} />
+          <SideNavItem to="/rubrics" icon={ClipboardList} label="Rubrics" />
+          <SideNavItem to="/invites" icon={KeyRound} label="Invite codes" />
+        </nav>
+        <div className="mt-auto border-t border-[var(--side-line)] pt-3">
+          <div className="flex items-center gap-2 px-0.5">
+            <Avatar name={me.displayName || me.email || "?"} size={32} />
+            <div className="min-w-0 flex-1">
+              <b className="block truncate text-[13px]">{me.displayName || me.email}</b>
+              <small className="block text-[11px] text-muted">Mentor · {me.org!.name}</small>
+            </div>
+            <ThemeToggle />
+            <button
+              title="Sign out"
+              onClick={() => signOut(getAuthOrThrow())}
+              className="grid h-[30px] w-[30px] cursor-pointer place-items-center rounded-lg text-muted transition-colors hover:bg-hoverfill hover:text-ink"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto px-[38px] py-[30px]">
+        <div key={location.pathname} className="rise mx-auto max-w-[1080px]">
+          <Suspense fallback={<Spinner label="Loading…" />}>
+            <Routes>
+              <Route path="/" element={<People />} />
+              <Route path="/invites" element={<Invites />} />
+              <Route path="/person/:uid" element={<PersonLayout />}>
+                <Route index element={<PersonSummary />} />
+                <Route path="sessions" element={<PersonSessions />} />
+              </Route>
+              <Route path="/person/:uid/skill/:dimId" element={<SkillDetail />} />
+              <Route path="/rubrics" element={<Rubrics />} />
+              <Route path="/rubrics/:rubricId" element={<RubricEditor />} />
+              <Route path="*" element={<People />} />
+            </Routes>
+          </Suspense>
+        </div>
+      </main>
     </div>
   );
 }
@@ -144,3 +239,4 @@ export default function App() {
     </HashRouter>
   );
 }
+

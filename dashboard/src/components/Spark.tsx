@@ -27,7 +27,7 @@ export function Spark({
     d += ` C ${(p1.x + (p2.x - p0.x) / 6).toFixed(1)},${(p1.y + (p2.y - p0.y) / 6).toFixed(1)} ${(p2.x - (p3.x - p1.x) / 6).toFixed(1)},${(p2.y - (p3.y - p1.y) / 6).toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
   }
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+    <svg className="spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
       <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
     </svg>
   );
