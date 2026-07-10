@@ -414,6 +414,26 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
   `GET /v1/orgs/:orgId/sessions` item shapes are UNCHANGED by MC6 (including
   by retraction markers — those are a separate admin-only read). Notes are
   a separate resource — join client-side via `sessionId`.
+- **Interface: self-serve program creation (SETTLED 2026-07-09; decision
+  in the log — replaces ops bootstrap for onboarding):**
+  - `POST /v1/orgs` (Bearer; any signed-in account that has NO org yet)
+    body `{ "name": "<1–80 chars>" }` → 200
+    `{ "orgId", "name", "role": "admin" }`. The caller becomes the new
+    program's Mentor (membership doc + custom claims `{orgId, role:"admin"}`
+    set server-side). Client MUST force-refresh the ID token afterwards.
+    Caller already in an org → 409 `{ "error": "already_in_org" }`.
+    Bad name → 400 `invalid_body`. Rate-limited (5 creations / 15 min / IP).
+    `orgId` is server-generated (slug + random suffix) — never client-chosen.
+  - WEB: an org-less account signing into the dashboard now gets a choice
+    screen instead of a dead end: "Create a program" (name → this endpoint)
+    or "I have an invite code" (existing `POST /v1/invites/redeem`; a
+    Mentor code joins an existing program as co-mentor). Accounts whose
+    role is trainee still get a "this dashboard is for mentors" message.
+  - iOS: [ ] the app mirrors the same gate for org-less signed-in users:
+    "Create a program" (this endpoint) alongside the existing "Join my
+    program" code entry. Consumes this contract; no other changes.
+  - Mentor codes are UNCHANGED and still the only way to join an EXISTING
+    program as mentor. Bootstrap script remains as an ops fallback only.
 - **Interface: retraction markers (SETTLED 2026-07-08):**
   - On successful `DELETE /v1/sessions/:clientSessionId` the server writes,
     in the same atomic batch as the deletion, a CONTENTLESS marker:
@@ -695,6 +715,13 @@ Insights, native mentor Cohort tab — both shipped — and the web dashboard):
   trainees often live in institutional Google accounts). Apple button keeps
   ≥ equal prominence per App Review 4.8. Same-email sign-ins link to one
   account, so no membership migration is needed.
+- 2026-07-09 **Self-serve program creation (Bilal's call).** Anyone can sign
+  in and CREATE their own empty program, becoming its Mentor — safe because
+  a new program sees nothing until trainees explicitly join it and share
+  into it (the review gate stays the privacy wall). Joining an EXISTING
+  program as mentor still requires a single-use Mentor code minted by a
+  current mentor — that wall is what keeps org data private. First-mentor
+  bootstrap via ops script is retired as the normal path.
 - 2026-07-09 **Dashboard theme: "Ambient glass" v2** (design handoff from
   Bilal, owner-approved from a 3-way exploration; implemented same day).
   Replaces the indigo/purple-gradient look: frosted-glass cards over
