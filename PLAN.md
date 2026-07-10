@@ -643,6 +643,10 @@ rebuild carries the MC8 UIs so nothing is built twice.
     deleting takes the now-empty program (org doc + its invite codes) with
     them.
   - No-org accounts (signed up, never joined) → just tokens + the auth user.
+  - CLOUD+DASH: [x] LIVE ON DEV, verified end-to-end — solo-owner full
+    deletion (auth user gone, re-signin 400) and owner-with-members 409;
+    web Account page (/account, via footer identity) with typed-email
+    confirmation gating. Prod held for the go-ahead batch.
   - iOS: [ ] "Delete account" in the app's account/settings — same endpoint,
     same behavior (trainee is never an owner, so the guard never trips).
     Consumes this contract; no other changes.

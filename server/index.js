@@ -203,6 +203,62 @@ app.post("/v1/invites/redeem", requireAuth, async (req, res, next) => {
   }
 });
 
+// Self-service account deletion (contract in PLAN.md). Deletes ONLY the
+// caller. Owner-with-members is blocked to avoid orphaning a program.
+app.delete("/v1/me", requireAuth, async (req, res, next) => {
+  try {
+    const uid = req.user.uid;
+    const orgId = req.user.orgId;
+    if (orgId) {
+      const [orgSnap, membersSnap] = await Promise.all([
+        db.doc(`orgs/${orgId}`).get(),
+        db.collection(`orgs/${orgId}/members`).get(),
+      ]);
+      const isOwner = orgSnap.get("createdBy") === uid;
+      const others = membersSnap.docs.filter((d) => d.id !== uid);
+      if (isOwner && others.length > 0) {
+        return res.status(409).json({ error: "owner_has_members" });
+      }
+
+      const batch = db.batch();
+      // Notes/replies I authored (delete my roots' child replies too).
+      const mine = await db.collection(`orgs/${orgId}/notes`).where("authorUid", "==", uid).get();
+      mine.docs.forEach((d) => batch.delete(d.ref));
+      const myRootIds = mine.docs.filter((d) => !d.get("parentNoteId")).map((d) => d.id);
+      for (const rootId of myRootIds) {
+        const kids = await db.collection(`orgs/${orgId}/notes`).where("parentNoteId", "==", rootId).get();
+        kids.docs.forEach((d) => batch.delete(d.ref));
+      }
+      // My sessions + their retraction markers.
+      const mySessions = await db.collection(`orgs/${orgId}/sessions`).where("uid", "==", uid).get();
+      mySessions.docs.forEach((d) => {
+        batch.delete(d.ref);
+        batch.delete(db.doc(`orgs/${orgId}/retractions/${d.id}`));
+      });
+      batch.delete(db.doc(`orgs/${orgId}/members/${uid}`));
+      // Sole member → tidy the now-empty program.
+      if (others.length === 0) {
+        batch.delete(db.doc(`orgs/${orgId}`));
+        const codes = await db.collection("inviteCodes").where("orgId", "==", orgId).get();
+        codes.docs.forEach((d) => batch.delete(d.ref));
+      }
+      await batch.commit();
+    }
+
+    const tokens = await db.collection(`users/${uid}/pushTokens`).get();
+    if (!tokens.empty) {
+      const tb = db.batch();
+      tokens.docs.forEach((d) => tb.delete(d.ref));
+      await tb.commit();
+    }
+    audit(req, "account.delete", { org: orgId ?? null });
+    await getAuth().deleteUser(uid);
+    res.json({ deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 app.get("/v1/me", requireAuth, async (req, res, next) => {
   try {
     let org = null;

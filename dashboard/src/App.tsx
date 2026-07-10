@@ -12,6 +12,7 @@ import { People } from "./pages/People";
 import { Invites } from "./pages/Invites";
 import { PersonLayout, PersonSessions, PersonSummary } from "./pages/Person";
 import { PersonChat } from "./pages/PersonChat";
+import { Account } from "./pages/Account";
 import { Rubrics, RubricEditor } from "./pages/Rubrics";
 import { Button } from "./components/ui/button";
 import { Card } from "./components/ui/card";
@@ -167,13 +168,22 @@ function Shell() {
         </nav>
         <div className="mt-auto border-t border-[var(--side-line)] pt-3">
           <div className={cn("flex items-center", collapsed ? "flex-col gap-2" : "gap-2 px-0.5")}>
-            <Avatar name={me.displayName || me.email || "?"} size={32} />
-            {!collapsed && (
-              <div className="min-w-0 flex-1">
-                <b className="block truncate text-[13px]">{me.displayName || me.email}</b>
-                <small className="block text-[11px] text-muted">Mentor · {me.org!.name}</small>
-              </div>
-            )}
+            <NavLink
+              to="/account"
+              title="Account settings"
+              className={cn(
+                "flex min-w-0 items-center rounded-lg transition-colors hover:bg-hoverfill",
+                collapsed ? "" : "flex-1 gap-2 px-1 py-1",
+              )}
+            >
+              <Avatar name={me.displayName || me.email || "?"} size={32} />
+              {!collapsed && (
+                <div className="min-w-0 flex-1">
+                  <b className="block truncate text-[13px]">{me.displayName || me.email}</b>
+                  <small className="block text-[11px] text-muted">Mentor · {me.org!.name}</small>
+                </div>
+              )}
+            </NavLink>
             <ThemeToggle />
             <button
               title="Sign out"
@@ -198,6 +208,7 @@ function Shell() {
                 <Route path="sessions" element={<PersonSessions />} />
               </Route>
               <Route path="/person/:uid/skill/:dimId" element={<SkillDetail />} />
+              <Route path="/account" element={<Account />} />
               <Route path="/rubrics" element={<Rubrics />} />
               <Route path="/rubrics/:rubricId" element={<RubricEditor />} />
               <Route path="*" element={<People />} />
