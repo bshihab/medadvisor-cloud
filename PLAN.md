@@ -592,7 +592,7 @@ rebuild carries the MC8 UIs so nothing is built twice.
       non-author edit 403), threads ride chronologically in me/org reads
       with authorRole, root delete cascades the thread, reply push wired
       through the MC7 sender both directions.
-- DASH:  [x] React rebuild LIVE ON DEV (prod held for Bilal's eyeball):
+- DASH:  [x] React rebuild + ambient-glass redesign LIVE ON DEV + PROD (2026-07-10):
       `dashboard/` = Vite + React + TS + Tailwind + shadcn-style components
       + Recharts (lazy-loaded — entry path ~62 kB gz, Recharts chunk only
       on the skill-detail route). Person-first IA: People page (avatar
