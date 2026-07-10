@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
-import { ClipboardList, KeyRound, LogOut, Monitor, Moon, Sun, Users } from "lucide-react";
+import { ClipboardList, KeyRound, LogOut, Menu, Monitor, Moon, Sun, Users } from "lucide-react";
 import { getAuthOrThrow, initAuth } from "./lib/firebase";
 import { api } from "./lib/api";
 import type { Me } from "./lib/types";
@@ -65,20 +65,24 @@ function SideNavItem({
   icon: Icon,
   label,
   count,
+  collapsed,
 }: {
   to: string;
   end?: boolean;
   icon: typeof Users;
   label: string;
   count?: number;
+  collapsed: boolean;
 }) {
   return (
     <NavLink
       to={to}
       end={end}
+      title={collapsed ? label : undefined}
       className={({ isActive }) =>
         cn(
-          "flex items-center gap-[11px] rounded-xl px-3 py-[9px] text-[14.5px] transition-colors",
+          "flex items-center gap-[11px] rounded-xl py-[9px] text-[14.5px] transition-colors",
+          collapsed ? "justify-center px-0" : "px-3",
           isActive
             ? "bg-accent/15 font-semibold text-accent"
             : "font-medium text-muted hover:bg-hoverfill",
@@ -88,8 +92,8 @@ function SideNavItem({
       {({ isActive }) => (
         <>
           <Icon size={18} className="flex-none" />
-          <span className="min-w-0 flex-1 truncate">{label}</span>
-          {count != null && (
+          {!collapsed && <span className="min-w-0 flex-1 truncate">{label}</span>}
+          {!collapsed && count != null && (
             <span
               className={cn(
                 "rounded-full px-2 py-0.5 text-[11.5px] font-semibold tabular-nums",
@@ -109,6 +113,12 @@ function Shell() {
   const { me, members } = useStore();
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("ma-sidebar") === "collapsed",
+  );
+  useEffect(() => {
+    localStorage.setItem("ma-sidebar", collapsed ? "collapsed" : "expanded");
+  }, [collapsed]);
 
   // Skill-detail point clicks pass a scroll target through router state;
   // otherwise each route change scrolls the console pane back to the top.
@@ -126,28 +136,44 @@ function Shell() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <aside className="glass-side flex w-[248px] flex-none flex-col p-[14px] pt-5">
-        <div className="flex items-center gap-[11px] px-2 pb-[18px]">
-          <span className="btn-glow grid h-[34px] w-[34px] place-items-center rounded-lg bg-accent text-base font-extrabold text-white">
+      <aside
+        className={cn(
+          "glass-side flex flex-none flex-col p-[14px] pt-5 transition-[width] duration-300",
+          collapsed ? "w-[68px]" : "w-[248px]",
+        )}
+      >
+        <div className={cn("flex items-center pb-[18px]", collapsed ? "flex-col gap-3" : "gap-[11px] px-2")}>
+          <span className="btn-glow grid h-[34px] w-[34px] flex-none place-items-center rounded-lg bg-accent text-base font-extrabold text-white">
             M
           </span>
-          <div>
-            <b className="block text-[16.5px] tracking-[-0.01em]">MedAdvisor</b>
-            <small className="mt-px block text-[11.5px] text-muted">Mentor console</small>
-          </div>
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <b className="block truncate text-[16.5px] tracking-[-0.01em]">MedAdvisor</b>
+              <small className="mt-px block text-[11.5px] text-muted">Mentor console</small>
+            </div>
+          )}
+          <button
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={() => setCollapsed((c) => !c)}
+            className="grid h-[30px] w-[30px] flex-none cursor-pointer place-items-center rounded-lg text-muted transition-colors hover:bg-hoverfill hover:text-ink"
+          >
+            <Menu size={18} />
+          </button>
         </div>
         <nav className="flex flex-1 flex-col gap-[3px] overflow-y-auto">
-          <SideNavItem to="/" end icon={Users} label="People" count={members.length} />
-          <SideNavItem to="/rubrics" icon={ClipboardList} label="Rubrics" />
-          <SideNavItem to="/invites" icon={KeyRound} label="Invite codes" />
+          <SideNavItem to="/" end icon={Users} label="People" count={members.length} collapsed={collapsed} />
+          <SideNavItem to="/rubrics" icon={ClipboardList} label="Rubrics" collapsed={collapsed} />
+          <SideNavItem to="/invites" icon={KeyRound} label="Invite codes" collapsed={collapsed} />
         </nav>
         <div className="mt-auto border-t border-[var(--side-line)] pt-3">
-          <div className="flex items-center gap-2 px-0.5">
+          <div className={cn("flex items-center", collapsed ? "flex-col gap-2" : "gap-2 px-0.5")}>
             <Avatar name={me.displayName || me.email || "?"} size={32} />
-            <div className="min-w-0 flex-1">
-              <b className="block truncate text-[13px]">{me.displayName || me.email}</b>
-              <small className="block text-[11px] text-muted">Mentor · {me.org!.name}</small>
-            </div>
+            {!collapsed && (
+              <div className="min-w-0 flex-1">
+                <b className="block truncate text-[13px]">{me.displayName || me.email}</b>
+                <small className="block text-[11px] text-muted">Mentor · {me.org!.name}</small>
+              </div>
+            )}
             <ThemeToggle />
             <button
               title="Sign out"
