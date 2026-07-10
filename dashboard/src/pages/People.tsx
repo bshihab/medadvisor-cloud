@@ -49,6 +49,71 @@ function MemberRow({ uid: memberUid }: { uid: string }) {
   );
 }
 
+// Simple v1 mentor-activity metrics (Bilal's call) — computed client-side
+// from the notes already in the store. Scoping to Owner-only comes with the
+// hierarchy milestone.
+function MentorActivityCard() {
+  const { me, members, notes } = useStore();
+  const rows = members
+    .filter((m) => m.role === "admin")
+    .map((m) => {
+      const stamps: string[] = [];
+      const engaged = new Set<string>();
+      for (const n of notes) {
+        if (n.authorUid === m.uid) {
+          stamps.push(n.createdAt ?? "");
+          engaged.add(n.traineeUid);
+        }
+        for (const r of n.replies) {
+          if (r.authorUid === m.uid) {
+            stamps.push(r.createdAt ?? "");
+            engaged.add(n.traineeUid);
+          }
+        }
+      }
+      return {
+        m,
+        written: stamps.length,
+        engaged: engaged.size,
+        last: stamps.sort().at(-1) || null,
+      };
+    })
+    .sort((a, b) => Number(b.m.uid === me.uid) - Number(a.m.uid === me.uid) || b.written - a.written);
+
+  return (
+    <Card className="p-0">
+      <div className="px-5 pb-2.5 pt-[18px]">
+        <CardTitle className="mb-0">Mentor activity</CardTitle>
+        <p className="mt-1 text-[12.5px] text-muted">Feedback written across the program</p>
+      </div>
+      <div className="pb-2">
+        {rows.map(({ m, written, engaged, last }) => (
+          <div key={m.uid} className="flex items-center gap-3 border-t border-rowline px-5 py-2.5">
+            <Avatar name={memberName(m)} size={28} />
+            <div className="min-w-0 flex-1">
+              <b className="block truncate text-[13px] font-semibold">
+                {memberName(m)}
+                {m.uid === me.uid && (
+                  <span className="ml-2 rounded-full border border-accent px-1.5 py-px text-[10px] font-semibold text-accent">
+                    You
+                  </span>
+                )}
+              </b>
+              <small className="block text-[11.5px] text-muted">
+                {written === 0
+                  ? "No feedback written yet"
+                  : `${written} note${written === 1 ? "" : "s"} & replies · ${engaged} trainee${
+                      engaged === 1 ? "" : "s"
+                    } · last active ${fmtDay(last)}`}
+              </small>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 const SectionHead = ({ label }: { label: string }) => (
   <div className="border-t border-rowline px-5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-faint">
     {label}
@@ -128,6 +193,7 @@ export function People() {
             ))}
           </div>
         </Card>
+        <div className="flex flex-col gap-5">
         <Card className="p-0">
           <div className="px-5 pb-2.5 pt-[18px]">
             <CardTitle className="mb-0">Cohort by skill</CardTitle>
@@ -148,6 +214,8 @@ export function People() {
             met = 1 · partial = 0.5 · missed = 0 · n/a excluded
           </p>
         </Card>
+        <MentorActivityCard />
+        </div>
       </div>
     </div>
   );
