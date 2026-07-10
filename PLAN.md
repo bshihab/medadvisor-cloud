@@ -168,6 +168,18 @@ amended decision — orgs live in Firestore, NOT IdP tenants), invite codes.
     provider clientId matches; full GoogleService-Info.plist on request)
   - Apple-portal prerequisite (Bilal, in Xcode on the Air): add the
     "Sign in with Apple" capability to the App ID `app.medadvisor.MedAdvisor`.
+  - **Apple sign-in on the WEB dashboard** (added 2026-07-09): the
+    "Continue with Apple" button is live on the login card (dev), but it
+    errors at Apple until Bilal completes the web config: ① Services ID
+    (e.g. `app.medadvisor.web`) with Sign in with Apple enabled and return
+    URLs `https://medadvisor-dev.firebaseapp.com/__/auth/handler` +
+    `https://medadvisor-production.firebaseapp.com/__/auth/handler`;
+    ② a Sign in with Apple key (.p8, note Key ID + Team ID);
+    ③ Firebase console → Authentication → Apple (both projects): fill
+    Services ID / Team ID / Key ID and paste the .p8 there (never in chat
+    or the repo). Native iOS Apple sign-in is unaffected throughout.
+    One account per email means app-Apple accounts land in the same
+    account on the web.
 
   **Login screen (per Apple HIG / App Review):**
   - Use the system `ASAuthorizationAppleIDButton` — never a hand-drawn

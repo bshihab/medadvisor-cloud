@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   GoogleAuthProvider,
+  OAuthProvider,
   signInWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
@@ -78,6 +79,25 @@ export function Login() {
           or
           <span className="h-px flex-1 bg-line" />
         </div>
+        <button
+          className="mb-2 flex h-[38px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-ink text-sm font-semibold text-background transition-[filter,transform] hover:brightness-110 active:scale-[0.97]"
+          onClick={async () => {
+            setErr("");
+            try {
+              const apple = new OAuthProvider("apple.com");
+              apple.addScope("email");
+              apple.addScope("name");
+              await signInWithPopup(getAuthOrThrow(), apple);
+            } catch (ex) {
+              fail(ex);
+            }
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M16.365 1.43c0 1.14-.46 2.21-1.21 3.02-.79.86-2.08 1.53-3.12 1.44a3.4 3.4 0 0 1-.03-.42c0-1.1.48-2.24 1.23-3.03.38-.41.88-.76 1.48-1.03.6-.26 1.17-.4 1.63-.42.02.15.02.3.02.44zM20.94 17.4c-.5 1.12-.74 1.62-1.39 2.61-.9 1.38-2.17 3.1-3.75 3.11-1.4.01-1.77-.92-3.67-.9-1.9.01-2.3.92-3.71.9-1.58-.02-2.78-1.57-3.68-2.95-2.52-3.84-2.79-8.36-1.23-10.76 1.1-1.7 2.85-2.7 4.49-2.7 1.67 0 2.72.92 4.1.92 1.34 0 2.16-.92 4.09-.92 1.46 0 3 .8 4.11 2.17-3.61 1.98-3.02 7.13.64 8.52z" />
+          </svg>
+          Continue with Apple
+        </button>
         <Button
           variant="outline"
           className="w-full"
