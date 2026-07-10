@@ -11,9 +11,58 @@ import { memberName, sessionsOf, useStore } from "@/store";
 
 // The console home: page header, Members card, Cohort-by-skill panel.
 // Invite codes live on their own page (/invites).
+function MemberRow({ uid: memberUid }: { uid: string }) {
+  const { me, members, sessions, orgCreatedBy } = useStore();
+  const m = members.find((x) => x.uid === memberUid)!;
+  const ss = sessionsOf(sessions, m.uid);
+  const series = ss.map(overallScore);
+  const latest = [...series].reverse().find((v) => v != null) ?? null;
+  return (
+    <Link
+      to={`/person/${m.uid}`}
+      className="flex items-center gap-3.5 border-t border-rowline px-5 py-[15px] transition-colors hover:bg-hoverfill"
+    >
+      <Avatar name={memberName(m)} />
+      <div className="min-w-0 flex-1">
+        <b className="block truncate text-[14.5px] font-semibold">
+          {memberName(m)}
+          {m.uid === me.uid && (
+            <span className="ml-2 rounded-full border border-accent px-2 py-px text-[10.5px] font-semibold text-accent">
+              You
+            </span>
+          )}
+          {orgCreatedBy != null && m.uid === orgCreatedBy && (
+            <span className="ml-1.5 rounded-full bg-teal px-2 py-px text-[10.5px] font-semibold text-white">
+              Owner
+            </span>
+          )}
+        </b>
+        <small className="mt-0.5 block text-xs text-muted">
+          {ss.length} session{ss.length === 1 ? "" : "s"}
+          {ss.length > 0 && ` · last ${fmtDay(ss.at(-1)!.recordedAt)}`}
+        </small>
+      </div>
+      {latest != null && <Badge style={{ background: bandColor(latest) }}>{bandName(latest)}</Badge>}
+      <Spark values={series} color={latest != null ? bandColor(latest) : "#8888"} />
+      <span className="flex-none text-[17px] text-faint">›</span>
+    </Link>
+  );
+}
+
+const SectionHead = ({ label }: { label: string }) => (
+  <div className="border-t border-rowline px-5 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-faint">
+    {label}
+  </div>
+);
+
 export function People() {
-  const { me, members, sessions, rubrics } = useStore();
+  const { me, members, sessions, rubrics, orgCreatedBy } = useStore();
   const navigate = useNavigate();
+  // Owner first among mentors; then the rest alphabetically-as-fetched.
+  const mentors = [...members.filter((m) => m.role === "admin")].sort(
+    (a, b) => Number(b.uid === orgCreatedBy) - Number(a.uid === orgCreatedBy),
+  );
+  const trainees = members.filter((m) => m.role !== "admin");
 
   // Cohort average per skill: mean of each trainee's LATEST non-null score.
   // Labels come from the rubric the cohort actually uses (majority of
@@ -59,32 +108,22 @@ export function People() {
                 No members yet — create a trainee invite code to get people on board.
               </p>
             )}
-            {members.map((m) => {
-              const ss = sessionsOf(sessions, m.uid);
-              const series = ss.map(overallScore);
-              const latest = [...series].reverse().find((v) => v != null) ?? null;
-              return (
-                <Link
-                  key={m.uid}
-                  to={`/person/${m.uid}`}
-                  className="flex items-center gap-3.5 border-t border-rowline px-5 py-[15px] transition-colors hover:bg-hoverfill"
-                >
-                  <Avatar name={memberName(m)} />
-                  <div className="min-w-0 flex-1">
-                    <b className="block truncate text-[14.5px] font-semibold">{memberName(m)}</b>
-                    <small className="mt-0.5 block text-xs text-muted">
-                      {ss.length} session{ss.length === 1 ? "" : "s"}
-                      {ss.length > 0 && ` · last ${fmtDay(ss.at(-1)!.recordedAt)}`}
-                    </small>
-                  </div>
-                  {latest != null && (
-                    <Badge style={{ background: bandColor(latest) }}>{bandName(latest)}</Badge>
-                  )}
-                  <Spark values={series} color={latest != null ? bandColor(latest) : "#8888"} />
-                  <span className="flex-none text-[17px] text-faint">›</span>
-                </Link>
-              );
-            })}
+            {mentors.length > 0 && <SectionHead label="Mentors" />}
+            {mentors.map((m) => (
+              <MemberRow key={m.uid} uid={m.uid} />
+            ))}
+            {trainees.length > 0 && <SectionHead label="Trainees" />}
+            {trainees.length === 0 && members.length > 0 && (
+              <>
+                <SectionHead label="Trainees" />
+                <p className="border-t border-rowline px-5 py-5 text-sm text-muted">
+                  No trainees yet — share a trainee invite code from the Invite codes page.
+                </p>
+              </>
+            )}
+            {trainees.map((m) => (
+              <MemberRow key={m.uid} uid={m.uid} />
+            ))}
           </div>
         </Card>
         <Card className="p-0">

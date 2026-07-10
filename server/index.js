@@ -234,7 +234,9 @@ app.get("/v1/orgs/:orgId/members", requireAuth, requireOrgAdmin, async (req, res
       };
     });
     audit(req, "org.members.read", { org: req.params.orgId });
-    res.json({ members, count: members.length });
+    // createdBy: uid of the program's creator (null for pre-self-serve orgs).
+    const orgSnap = await db.doc(`orgs/${req.params.orgId}`).get();
+    res.json({ members, count: members.length, createdBy: orgSnap.get("createdBy") ?? null });
   } catch (err) {
     next(err);
   }

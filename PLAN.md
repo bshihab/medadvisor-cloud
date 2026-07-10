@@ -439,6 +439,12 @@ Notes are phase-1 PULL-based — no push/APNs (future milestone; decisions log).
     program" code entry. Consumes this contract; no other changes.
   - Mentor codes are UNCHANGED and still the only way to join an EXISTING
     program as mentor. Bootstrap script remains as an ops fallback only.
+  - SHAPE CHANGE (additive, 2026-07-10): `GET /v1/orgs/:orgId/members` now
+    also returns top-level `"createdBy": uid|null` (the program creator;
+    null for pre-self-serve orgs). Existing decoders unaffected.
+  - iOS: [ ] the app's mentor view mirrors the web's member grouping
+    (Bilal's call): Mentors section first (program creator = "Owner" chip,
+    signed-in user = "You" chip), Trainees section below.
 - **Interface: retraction markers (SETTLED 2026-07-08):**
   - On successful `DELETE /v1/sessions/:clientSessionId` the server writes,
     in the same atomic batch as the deletion, a CONTENTLESS marker:

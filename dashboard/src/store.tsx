@@ -5,6 +5,7 @@ import type { Invite, Me, Member, Note, Retraction, RubricItem, Session } from "
 interface Store {
   me: Me;
   members: Member[];
+  orgCreatedBy: string | null;
   sessions: Session[];
   notes: Note[];
   retractions: Retraction[];
@@ -28,7 +29,7 @@ export async function loadAll(me: Me): Promise<Omit<Store, "refreshNotes" | "ref
   }
   const org = me.org.orgId;
   const [members, sessions, notes, retractions, invites, rubrics] = await Promise.all([
-    api<{ members: Member[] }>(`/v1/orgs/${org}/members`),
+    api<{ members: Member[]; createdBy: string | null }>(`/v1/orgs/${org}/members`),
     api<{ sessions: Session[] }>(`/v1/orgs/${org}/sessions?limit=500`),
     api<{ notes: Note[] }>(`/v1/orgs/${org}/notes?limit=500`),
     api<{ retractions: Retraction[] }>(`/v1/orgs/${org}/retractions?limit=500`),
@@ -38,6 +39,7 @@ export async function loadAll(me: Me): Promise<Omit<Store, "refreshNotes" | "ref
   return {
     me,
     members: members.members,
+    orgCreatedBy: members.createdBy ?? null,
     sessions: sessions.sessions,
     notes: notes.notes,
     retractions: retractions.retractions,
