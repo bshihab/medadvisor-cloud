@@ -58,9 +58,11 @@ const SectionHead = ({ label }: { label: string }) => (
 export function People() {
   const { me, members, sessions, rubrics, orgCreatedBy } = useStore();
   const navigate = useNavigate();
-  // Owner first among mentors; then the rest alphabetically-as-fetched.
+  // You always first, then the Owner, then the rest as fetched.
   const mentors = [...members.filter((m) => m.role === "admin")].sort(
-    (a, b) => Number(b.uid === orgCreatedBy) - Number(a.uid === orgCreatedBy),
+    (a, b) =>
+      Number(b.uid === me.uid) - Number(a.uid === me.uid) ||
+      Number(b.uid === orgCreatedBy) - Number(a.uid === orgCreatedBy),
   );
   const trainees = members.filter((m) => m.role !== "admin");
 
