@@ -76,6 +76,23 @@ org can query it).
   status, warns before destroying anything not yet backed up. This is the only
   path that deletes local records on purpose.
 
+## Logout & wipe prompts (exact UX)
+
+**Sign out while sessions are still un-backed** (has `backedUpAt == nil` records):
+- Online → "N sessions haven't finished backing up. Wait for them to finish, or
+  sign out now — they'll stay on this device and back up next time you sign in."
+  Buttons: **Wait** (runs the queue, spinner, then signs out) · **Sign out anyway**.
+- Offline → "N sessions aren't backed up yet. They'll stay on this device and
+  back up when you next sign in on wifi." Button: **Sign out**.
+- Neither wording says "lose data" — logout never deletes.
+
+**"Remove my data from this device"** (the only destructive path):
+- If everything is backed up → "Your history is safely backed up. Remove it from
+  this device?" · **Remove** / Cancel.
+- If some sessions aren't backed up → RED: "N sessions aren't backed up —
+  removing them is permanent and can't be undone." · **Remove anyway** /
+  **Keep until backed up** / Cancel.
+
 ## Open risk
 
 Even scores + redacted quotes are potential PHI if redaction slips — so this
