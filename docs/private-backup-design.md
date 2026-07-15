@@ -41,7 +41,7 @@ because nobody but the owner ever sees it, but the automated scrub still runs.
 | D1 | Backup scope | **Scores + redacted quotes + summary. No transcript.** |
 | D2 | Automatic or opt-in? | **On by default**, clear consent at sign-up, opt-out toggle in Settings |
 | D3 | Consent copy | "Your feedback history (scores and redacted highlights — never the recording or transcript) is saved to your private account so it's on all your devices. Only you can see it unless you choose to share a session with a mentor." |
-| D4 | Sign-out behavior | Once backed up, sign-out **deletes** the departing user's local records (fixes the shared-device leak); sign-in restores. Records not yet backed up (offline) are kept, not deleted. |
+| D4 | Sign-out behavior | Sign-out **hides only, never deletes** (no risk of losing an un-backed-up session on an offline logout). Un-backed records stay owner-tagged and back up when that user next signs in online. Shared-device wiping is a **separate explicit "Remove my data from this device" button** that warns if anything isn't backed up yet (remove-anyway vs keep-until-online). Key constraint: **backup requires the user's auth token, so nothing can upload while logged out** — un-backed data uploads on next sign-in, not during logout. |
 | D5 | Retention | Keep indefinitely; deleting a session (device-only choice) also removes the private backup. "Delete everywhere" already covers the shared copy. |
 
 ## Cloud contract (for the cloud chat to settle in PLAN.md)
@@ -70,7 +70,11 @@ org can query it).
   the existing `mergeRestored`; restored records have no transcript).
 - Settings: "Back up my history to my private account" toggle (default on);
   turning off stops future backups (existing ones remain until deleted).
-- Sign-out: delete local records that have `backedUpAt` set; keep the rest.
+- Sign-out: **hide only, no deletion.** Un-backed records (no `backedUpAt`)
+  persist owner-tagged and upload on the next authenticated online session.
+- Settings: separate "Remove my data from this device" button — checks backup
+  status, warns before destroying anything not yet backed up. This is the only
+  path that deletes local records on purpose.
 
 ## Open risk
 
