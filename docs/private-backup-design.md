@@ -42,7 +42,7 @@ because nobody but the owner ever sees it, but the automated scrub still runs.
 | D2 | Automatic or opt-in? | **On by default**, clear consent at sign-up, opt-out toggle in Settings |
 | D3 | Consent copy | "Your feedback history (scores and redacted highlights — never the recording or transcript) is saved to your private account so it's on all your devices. Only you can see it unless you choose to share a session with a mentor." |
 | D4 | Sign-out behavior | Sign-out **hides only, never deletes** (no risk of losing an un-backed-up session on an offline logout). Un-backed records stay owner-tagged and back up when that user next signs in online. Shared-device wiping is a **separate explicit "Remove my data from this device" button** that warns if anything isn't backed up yet (remove-anyway vs keep-until-online). Key constraint: **backup requires the user's auth token, so nothing can upload while logged out** — un-backed data uploads on next sign-in, not during logout. |
-| D5 | Retention | Keep indefinitely; deleting a session (device-only choice) also removes the private backup. "Delete everywhere" already covers the shared copy. |
+| D5 | Retention / delete | A session can live in 3 places: (1) device, (2) your private backup, (3) mentor's dashboard (if shared). **Delete (default) removes YOUR copies — device + private backup.** The mentor's copy is untouched by default; **"Delete everywhere"** additionally removes the mentor's copy (+ retraction marker). Keep backups indefinitely otherwise. |
 
 ## Cloud contract (for the cloud chat to settle in PLAN.md)
 
@@ -60,9 +60,11 @@ org can query it).
 
 ## iOS behavior
 
-- On analysis complete: after saving locally, `stampBackedUp` uploads the
-  private copy in the background (if backup enabled + signed in + online);
-  a `backedUpAt` field on `ConsultationRecord` records success.
+- **Back up right after each analysis** (when online) — NOT deferred to logout.
+  This keeps the un-backed backlog empty in the normal flow, so logout rarely
+  has anything pending. A `backedUpAt` field on `ConsultationRecord` records
+  success. (Constraint: uploads need the auth token, so a backlog can only be
+  drained while signed in — the post-analysis timing minimizes when that bites.)
 - Offline: queue — retry the backup upload on next foreground/sign-in (this is
   the ONE place an automatic retry queue is appropriate, because there's no
   per-upload consent gate — consent was given once).
