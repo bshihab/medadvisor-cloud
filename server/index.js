@@ -30,6 +30,7 @@ const limiter = (max, windowMs = 15 * 60_000) =>
 app.use(limiter(600));                        // global: 600 / 15 min / IP
 app.use("/v1/invites/redeem", limiter(20));   // slow invite-code guessing
 app.use("/v1/sessions", limiter(120));
+app.use("/v1/me/backup", limiter(120));
 app.use("/v1/orgs", (req, res, next) =>
   req.method === "POST" && req.path === "/" ? limiter(5)(req, res, next) : next());
 
@@ -245,13 +246,19 @@ app.delete("/v1/me", requireAuth, async (req, res, next) => {
       await batch.commit();
     }
 
-    const tokens = await db.collection(`users/${uid}/pushTokens`).get();
-    if (!tokens.empty) {
-      const tb = db.batch();
-      tokens.docs.forEach((d) => tb.delete(d.ref));
-      await tb.commit();
+    // Personal space: push tokens + the private backup (MC9) — a deleted
+    // account leaves no private copies behind.
+    const [tokens, backups] = await Promise.all([
+      db.collection(`users/${uid}/pushTokens`).get(),
+      db.collection(`users/${uid}/backupSessions`).get(),
+    ]);
+    const personal = [...tokens.docs, ...backups.docs];
+    for (let i = 0; i < personal.length; i += 400) {
+      const pb = db.batch();
+      personal.slice(i, i + 400).forEach((d) => pb.delete(d.ref));
+      await pb.commit();
     }
-    audit(req, "account.delete", { org: orgId ?? null });
+    audit(req, "account.delete", { org: orgId ?? null, backupsDeleted: backups.size });
     await getAuth().deleteUser(uid);
     res.json({ deleted: true });
   } catch (err) {
@@ -898,6 +905,129 @@ app.get("/v1/orgs/:orgId/invites", requireAuth, requireOrgAdmin, async (req, res
       .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
     audit(req, "org.invites.read", { org: req.params.orgId });
     res.json({ invites, count: invites.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------- MC9: private cloud backup (contract in PLAN.md) ----------
+//
+// A user's own scorecard history, readable ONLY by them: no org endpoint
+// touches users/{uid}/backupSessions, and org claims aren't required. The
+// hard line (D1): audio/transcript are never accepted — same unknown-key
+// rejection as shared sessions, so no field exists for one to ride in.
+const BACKUP_KEYS = new Set([
+  "clientSessionId", "recordedAt", "location", "rubricId", "rubricVersion", "summary", "criteria",
+]);
+
+function backupBodyError(b, clientSessionId) {
+  if (typeof b !== "object" || b === null || Array.isArray(b)) return "body must be a JSON object";
+  const unknown = Object.keys(b).filter((k) => !BACKUP_KEYS.has(k));
+  if (unknown.length) return `unknown keys: ${unknown.join(", ")}`;
+  if (b.clientSessionId != null && b.clientSessionId !== clientSessionId)
+    return "body clientSessionId must match the URL";
+  if (typeof b.recordedAt !== "string" || Number.isNaN(Date.parse(b.recordedAt)))
+    return "recordedAt must be an ISO-8601 timestamp";
+  if (b.location != null && (typeof b.location !== "string" || b.location.length > 200))
+    return "location must be a string of at most 200 chars";
+  if (typeof b.rubricId !== "string" || !b.rubricId) return "rubricId is required";
+  if (typeof b.rubricVersion !== "string" || !b.rubricVersion) return "rubricVersion is required";
+  if (b.summary != null && (typeof b.summary !== "string" || b.summary.length > 2000))
+    return "summary must be a string of at most 2000 chars";
+  if (!Array.isArray(b.criteria) || b.criteria.length < 1 || b.criteria.length > 64)
+    return "criteria must be an array of 1-64 items";
+  for (const [i, c] of b.criteria.entries()) {
+    if (typeof c !== "object" || c === null || Array.isArray(c)) return `criteria[${i}] must be an object`;
+    const u = Object.keys(c).filter((k) => !CRITERION_KEYS.has(k));
+    if (u.length) return `criteria[${i}] unknown keys: ${u.join(", ")}`;
+    if (typeof c.id !== "string" || !c.id) return `criteria[${i}].id is required`;
+    if (typeof c.dimension !== "string" || !c.dimension) return `criteria[${i}].dimension is required`;
+    if (!RESULT_VALUES.has(c.result)) return `criteria[${i}].result must be met|partial|missed|na`;
+    if (c.evidence != null && (typeof c.evidence !== "string" || c.evidence.length > 500))
+      return `criteria[${i}].evidence must be a string of at most 500 chars`;
+    if (c.tip != null && (typeof c.tip !== "string" || c.tip.length > 500))
+      return `criteria[${i}].tip must be a string of at most 500 chars`;
+  }
+  return null;
+}
+
+const toBackupItem = (doc) => {
+  const s = doc.data();
+  return {
+    clientSessionId: doc.id,
+    recordedAt: s.recordedAt?.toDate()?.toISOString() ?? null,
+    backedUpAt: s.backedUpAt?.toDate()?.toISOString() ?? null,
+    location: s.location ?? null,
+    rubricId: s.rubricId,
+    rubricVersion: s.rubricVersion,
+    summary: s.summary ?? null,
+    criteria: s.criteria,
+  };
+};
+
+app.put("/v1/me/backup/sessions/:clientSessionId", requireAuth, async (req, res, next) => {
+  try {
+    const id = req.params.clientSessionId;
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(id))
+      return res.status(400).json({ error: "invalid_body", detail: "clientSessionId must match [A-Za-z0-9_-]{1,128}" });
+    const detail = backupBodyError(req.body, id);
+    if (detail) return res.status(400).json({ error: "invalid_body", detail });
+    const b = req.body;
+    const ref = db.doc(`users/${req.user.uid}/backupSessions/${id}`);
+    await ref.set({
+      clientSessionId: id,
+      recordedAt: new Date(b.recordedAt),
+      backedUpAt: FieldValue.serverTimestamp(),
+      location: b.location ?? null,
+      rubricId: b.rubricId,
+      rubricVersion: b.rubricVersion,
+      summary: b.summary ?? null,
+      criteria: b.criteria.map((c) => ({
+        id: c.id,
+        dimension: c.dimension,
+        result: c.result,
+        evidence: c.evidence ?? null,
+        tip: c.tip ?? null,
+      })),
+    });
+    audit(req, "backup.upsert", { clientSessionId: id, rubricId: b.rubricId });
+    const saved = await ref.get();
+    res.json({ clientSessionId: id, backedUpAt: saved.get("backedUpAt")?.toDate()?.toISOString() ?? null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get("/v1/me/backup/sessions", requireAuth, async (req, res, next) => {
+  try {
+    const snap = await db.collection(`users/${req.user.uid}/backupSessions`).get();
+    let sessions = snap.docs.map(toBackupItem);
+    if (req.query.since) {
+      const since = String(req.query.since);
+      if (Number.isNaN(Date.parse(since)))
+        return res.status(400).json({ error: "invalid_body", detail: "since must be an ISO-8601 timestamp" });
+      sessions = sessions.filter((s) => (s.backedUpAt ?? "") > since);
+    }
+    const limit = Math.min(500, Math.max(1, Number.parseInt(req.query.limit ?? "500", 10) || 500));
+    sessions = sessions
+      .sort((a, b) => (b.recordedAt ?? "").localeCompare(a.recordedAt ?? ""))
+      .slice(0, limit);
+    res.json({ sessions, count: sessions.length });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Owner-only by construction: the path is scoped to the caller's own uid.
+// Independent of the mentor's shared copy (D5) — this never touches orgs/*.
+app.delete("/v1/me/backup/sessions/:clientSessionId", requireAuth, async (req, res, next) => {
+  try {
+    const ref = db.doc(`users/${req.user.uid}/backupSessions/${req.params.clientSessionId}`);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: "not_found" });
+    await ref.delete();
+    audit(req, "backup.delete", { clientSessionId: req.params.clientSessionId });
+    res.json({ deleted: true, clientSessionId: req.params.clientSessionId });
   } catch (err) {
     next(err);
   }

@@ -711,9 +711,18 @@ can read — cross-device history that survives a lost phone, with the privacy
 promise intact. Full spec + rationale: `docs/private-backup-design.md`
 (D1–D5 approved by Bilal 2026-07-15). NOTE: the specialist-hierarchy work
 previously sketched as "MC9" is renumbered **MC10** (below).
-- CLOUD: [ ] `PUT/GET/DELETE /v1/me/backup/sessions` (contract below)
-- CLOUD: [ ] `DELETE /v1/me` (account deletion) also erases the private
-      backup — a deleted account leaves no private copies behind
+- CLOUD: [x] `PUT/GET/DELETE /v1/me/backup/sessions` — LIVE ON DEV, fully
+      verified: idempotent upsert/replace, restore read + `since` filter,
+      404-converging delete, URL/body id mismatch 400, 401 unauthenticated,
+      works with NO org claims. **Hard line proven:** `transcript` rejected
+      at top level AND `speakerTurns` inside criteria.
+      **Privacy proven:** every mentor org read (sessions ±uid, notes,
+      retractions — real multi-KB responses) contains zero backup data.
+      **D5 proven both ways:** deleting the backup leaves the shared copy
+      intact and deleting the shared copy leaves the backup intact.
+      Prod held for the go-ahead batch.
+- CLOUD: [x] `DELETE /v1/me` also erases the private backup — verified
+      (audit `backupsDeleted: 1`; account gone, no private copies left)
 - iOS:   [ ] analysis-time background upload + `backedUpAt` + offline retry
       queue; restore-on-sign-in merge; Settings opt-out; logout/wipe prompts
 - **Accept:** record a session on device A → it appears on device B after
