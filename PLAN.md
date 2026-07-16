@@ -664,7 +664,7 @@ rebuild carries the MC8 UIs so nothing is built twice.
     roots ride the same `GET /v1/me/notes` / org-notes threads.
   - Push: a trainee root notifies ALL the org's mentors ("New message from
     your trainee", preview, data `{noteId, sessionId, orgId}`) — MC7
-    sender, best-effort as always. (MC9 assignments will narrow the
+    sender, best-effort as always. (MC10 assignments will narrow the
     audience later.)
   - iOS: this unlocks the trainee composer and the "Ask about this"
     session/criterion-anchored buttons.
@@ -704,6 +704,80 @@ rebuild carries the MC8 UIs so nothing is built twice.
   - Firestore: same `orgs/{orgId}/notes/*` collection; replies carry
     `parentNoteId` and INHERIT `traineeUid`/`sessionId`/`criterionId` from
     the root, so every existing filtered read returns whole threads.
+
+## MC9 — Private cloud backup (cross-device history)   Status: IN PROGRESS
+Each trainee's OWN results auto-back-up to a private per-user space only they
+can read — cross-device history that survives a lost phone, with the privacy
+promise intact. Full spec + rationale: `docs/private-backup-design.md`
+(D1–D5 approved by Bilal 2026-07-15). NOTE: the specialist-hierarchy work
+previously sketched as "MC9" is renumbered **MC10** (below).
+- CLOUD: [ ] `PUT/GET/DELETE /v1/me/backup/sessions` (contract below)
+- CLOUD: [ ] `DELETE /v1/me` (account deletion) also erases the private
+      backup — a deleted account leaves no private copies behind
+- iOS:   [ ] analysis-time background upload + `backedUpAt` + offline retry
+      queue; restore-on-sign-in merge; Settings opt-out; logout/wipe prompts
+- **Accept:** record a session on device A → it appears on device B after
+  sign-in (scores + redacted quotes only, NO transcript); the org/mentor
+  dashboard never shows it unless separately shared; deleting it from the
+  owner's side leaves a previously-shared mentor copy intact (and vice
+  versa); opting out stops new backups.
+- **THE HARD LINE (D1):** audio and verbatim transcript/speaker turns are
+  NEVER backed up — device-only, always. The API enforces this the same way
+  shared sessions do: unknown keys rejected at every level, so there is no
+  field a transcript could ride in.
+- **Interface (SETTLED 2026-07-15 — iOS chat builds against this; entirely
+  additive, no existing shape changes):**
+  - Firestore: `users/{uid}/backupSessions/{clientSessionId}` — server-only
+    access, deny-by-default rules unchanged. NO org endpoint reads this
+    collection: a user's backup is theirs alone, invisible to every mentor.
+  - Auth: Bearer, and **org claims are NOT required** — private backup works
+    for accounts that belong to no program (it is personal space, not org
+    data).
+  - `PUT /v1/me/backup/sessions/:clientSessionId` — idempotent upsert (re-PUT
+    replaces; last write wins). Body:
+    ```json
+    { "recordedAt": "2026-07-15T18:20:00Z", "location": "Outpatient Clinic",
+      "rubricId": "outpatient-clinic", "rubricVersion": "0.1.0-draft",
+      "summary": "<redacted, automated pass>",
+      "criteria": [ { "id", "dimension", "result": "met|partial|missed|na",
+                      "evidence": "<redacted quote or null>", "tip": null } ] }
+    ```
+    `clientSessionId` may also appear in the body but MUST equal the URL
+    (mismatch → 400) — the URL is authoritative. Validation mirrors
+    `POST /v1/sessions` minus org/anchor: unknown keys rejected at top level
+    AND inside criteria · `result` enum · 1–64 criteria · summary ≤2000 ·
+    evidence/tip ≤500 each · location ≤200 · `recordedAt` ISO-8601 ·
+    `clientSessionId` matches `[A-Za-z0-9_-]{1,128}`. Violations → 400
+    `{"error":"invalid_body","detail":…}`. → 200
+    `{ "clientSessionId", "backedUpAt" }`.
+  - `GET /v1/me/backup/sessions?since=&limit=` → `{ "sessions": [ <body shape
+    + "clientSessionId" + "backedUpAt"> ], "count" }`, newest first by
+    `recordedAt`. `since` = ISO-8601, filters `backedUpAt > since`
+    (exclusive) for incremental sync. `limit` default 500, max 500.
+  - `DELETE /v1/me/backup/sessions/:clientSessionId` → 200
+    `{ "deleted": true, "clientSessionId" }`; unknown/already-deleted → 404
+    `not_found` (clients may safely treat 404 as success — repeat deletes
+    converge, same convention as `DELETE /v1/sessions`).
+  - **Independence (D5):** the private backup and the mentor's shared copy
+    are SEPARATE copies. `DELETE /v1/me/backup/sessions/:id` never touches
+    `orgs/{org}/sessions`; the existing `DELETE /v1/sessions/:id` (mentor
+    copy + retraction marker + attached notes) is unchanged and never
+    touches the backup. A session may be backup-only, shared-only, or both.
+  - Rate limit: 120 / 15 min / IP on the backup routes (as with sessions).
+
+## MC10 — Specialist hierarchy (Owner assigns; mentors see their own)  Status: NOT STARTED
+Bilal's model: main doctor (Owner) at the top; speech specialists each see
+only the trainees they train. Renumbered from the earlier "MC9" sketch.
+- [ ] Owner assigns trainees to mentors; assigned mentors' org reads are
+      server-filtered to their assignees; Owner sees everything and is the
+      only one who can mint Mentor codes
+- [ ] A trainee redeeming a mentor-minted trainee code is auto-assigned to
+      that mentor; Owner can reassign
+- [ ] Mentors' own sessions never enter the shared org pool (server rejects;
+      app hides the share gate for mentor accounts) — closes the "why can
+      other directors see my practice session?" oddity
+- **Accept:** specialist A cannot see specialist B's trainees anywhere (web
+  or app); Owner sees all; existing pre-hierarchy orgs keep working.
 
 ---
 
