@@ -646,7 +646,7 @@ rebuild carries the MC8 UIs so nothing is built twice.
   - CLOUD+DASH: [x] LIVE ON DEV, verified end-to-end — solo-owner full
     deletion (auth user gone, re-signin 400) and owner-with-members 409;
     web Account page (/account, via footer identity) with typed-email
-    confirmation gating. Prod held for the go-ahead batch.
+    confirmation gating. Live on dev + PROD (2026-07-15).
   - iOS: [ ] "Delete account" in the app's account/settings — same endpoint,
     same behavior (trainee is never an owner, so the guard never trips).
     Consumes this contract; no other changes.
@@ -676,7 +676,7 @@ rebuild carries the MC8 UIs so nothing is built twice.
     per-criterion 💬 / per-session Discuss prefill the composer's anchor.
   - CLOUD: [x] POST /v1/me/notes LIVE ON DEV, verified (trainee general +
     criterion-anchored roots, foreign-session 400, mentor 403,
-    mentor-notify push wired). Prod held for the go-ahead batch.
+    mentor-notify push wired). Live on dev + PROD (2026-07-15).
 
   **Threaded replies.** Single-level threads: replies attach to a ROOT
   note only (replying to a reply is a 400 — thread stays flat and
@@ -720,7 +720,7 @@ previously sketched as "MC9" is renumbered **MC10** (below).
       retractions — real multi-KB responses) contains zero backup data.
       **D5 proven both ways:** deleting the backup leaves the shared copy
       intact and deleting the shared copy leaves the backup intact.
-      Prod held for the go-ahead batch.
+      Deployed to PROD 2026-07-15 (auth gates smoke-tested).
 - CLOUD: [x] `DELETE /v1/me` also erases the private backup — verified
       (audit `backupsDeleted: 1`; account gone, no private copies left)
 - iOS:   [x] analysis-time background upload + `backedUpAt` + offline retry
