@@ -723,8 +723,9 @@ previously sketched as "MC9" is renumbered **MC10** (below).
       Prod held for the go-ahead batch.
 - CLOUD: [x] `DELETE /v1/me` also erases the private backup — verified
       (audit `backupsDeleted: 1`; account gone, no private copies left)
-- iOS:   [ ] analysis-time background upload + `backedUpAt` + offline retry
+- iOS:   [x] analysis-time background upload + `backedUpAt` + offline retry
       queue; restore-on-sign-in merge; Settings opt-out; logout/wipe prompts
+      — BUILT (PrivateBackup.swift), matches this contract; device test pending
 - **Accept:** record a session on device A → it appears on device B after
   sign-in (scores + redacted quotes only, NO transcript); the org/mentor
   dashboard never shows it unless separately shared; deleting it from the
