@@ -81,6 +81,12 @@ function toRubricItem(doc) {
 
 const CACHE = "public, max-age=300";
 
+// A rubric version string as a safe Firestore doc id (versions are immutable
+// snapshots kept under rubrics/{id}/versions so old sessions can render against
+// the exact rubric they were scored with).
+const versionDocId = (v) =>
+  String(v ?? "").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 200) || "unversioned";
+
 app.get("/v1/rubrics", async (_req, res, next) => {
   try {
     const snap = await db.collection("rubrics").get();
@@ -98,6 +104,23 @@ app.get("/v1/rubrics/:id", async (req, res, next) => {
     if (!doc.exists) return res.status(404).json({ error: "not_found" });
     res.set("Cache-Control", CACHE);
     res.json(toRubricItem(doc));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// A specific historical version snapshot (public read). Used by the dashboard so
+// a session scored under an old rubric renders that rubric's prompts/labels, not
+// the current (possibly edited) ones. 404 for versions predating history.
+app.get("/v1/rubrics/:id/versions/:version", async (req, res, next) => {
+  try {
+    const doc = await db
+      .collection("rubrics").doc(req.params.id)
+      .collection("versions").doc(versionDocId(req.params.version)).get();
+    if (!doc.exists) return res.status(404).json({ error: "not_found" });
+    const rubric = doc.data();
+    res.set("Cache-Control", "public, max-age=86400"); // immutable snapshot
+    res.json({ id: req.params.id, version: rubric.version ?? req.params.version, rubric });
   } catch (err) {
     next(err);
   }
@@ -1160,10 +1183,21 @@ app.put("/v1/rubrics/:id", requireAuth, async (req, res, next) => {
     if (!cur.exists) return res.status(404).json({ error: "not_found" });
     const detail = rubricBodyError(req.body, req.params.id);
     if (detail) return res.status(400).json({ error: "invalid_body", detail });
-    if (req.body.version === cur.get("version")) {
+    const curVersion = cur.get("version");
+    if (req.body.version === curVersion) {
       return res.status(409).json({ error: "version_conflict", detail: "version must change on any edit" });
     }
     const wr = await ref.set(req.body);
+    // Immutable version history: snapshot the NEW version, and (on the first edit)
+    // the OUTGOING one too, so a session's stored rubricVersion always resolves to
+    // the rubric it was actually scored against. Best-effort — the authoritative
+    // write above already succeeded.
+    const vbatch = db.batch();
+    if (curVersion) {
+      vbatch.set(ref.collection("versions").doc(versionDocId(curVersion)), cur.data(), { merge: true });
+    }
+    vbatch.set(ref.collection("versions").doc(versionDocId(req.body.version)), req.body);
+    await vbatch.commit();
     audit(req, "rubric.update", { rubricId: req.params.id, version: req.body.version });
     res.json({ id: req.params.id, version: req.body.version, updatedAt: wr.writeTime.toDate().toISOString() });
   } catch (err) {

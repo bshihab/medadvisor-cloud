@@ -5,6 +5,7 @@ import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { ResultBadge } from "./ui/badge";
 import { fmtDay, fmtWhen, metOfY } from "@/lib/scoring";
+import { useRubricAt } from "@/lib/rubricVersions";
 import { useStore } from "@/store";
 import type { Rubric, Session } from "@/lib/types";
 
@@ -68,8 +69,11 @@ function CriterionRow({
 export function SessionCard({ session, rubric }: { session: Session; rubric: Rubric | undefined }) {
   const navigate = useNavigate();
   const { notes } = useStore();
-  const dimLabel = (id: string) => rubric?.dimensions.find((d) => d.id === id)?.label ?? id;
-  const promptOf = (cid: string) => rubric?.criteria.find((c) => c.id === cid)?.prompt ?? cid;
+  // Render this session's criteria against the rubric VERSION it was scored with,
+  // falling back to the current rubric for versions that predate history.
+  const scored = useRubricAt(session.rubricId, session.rubricVersion, rubric);
+  const dimLabel = (id: string) => scored?.dimensions.find((d) => d.id === id)?.label ?? id;
+  const promptOf = (cid: string) => scored?.criteria.find((c) => c.id === cid)?.prompt ?? cid;
   const byDim: Record<string, Session["criteria"]> = {};
   for (const c of session.criteria) (byDim[c.dimension] ??= []).push(c);
   const [showCriteria, setShowCriteria] = useState(false);
