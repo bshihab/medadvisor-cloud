@@ -27,5 +27,11 @@ export async function api<T>(path: string, opts: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
-export const publicApi = async <T>(path: string): Promise<T> =>
-  (await fetch(path).then((r) => r.json())) as T;
+export const publicApi = async <T>(path: string): Promise<T> => {
+  const res = await fetch(path);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body.error ?? `http_${res.status}`, body.detail);
+  }
+  return (await res.json()) as T;
+};

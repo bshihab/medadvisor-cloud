@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Paperclip, Send, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { fmtDay, roleLabel } from "@/lib/scoring";
-import { useStore } from "@/store";
+import { markChatSeen, useStore } from "@/store";
 import type { Note, Reply } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
@@ -67,6 +67,12 @@ export function PersonChat() {
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
   }, [msgs.length, uid]);
+
+  // Viewing the chat clears the unread dot on the People page: mark seen on open
+  // and as new messages arrive while it's on screen.
+  useEffect(() => {
+    markChatSeen(uid);
+  }, [uid, msgs.length]);
 
   if (!member) return null;
 
@@ -175,12 +181,16 @@ export function PersonChat() {
                             className="text-ink"
                             disabled={!draft.trim()}
                             onClick={async () => {
-                              await api(pathOf(m), {
-                                method: "PATCH",
-                                body: JSON.stringify({ text: draft.trim() }),
-                              });
-                              await refreshNotes();
-                              setEditing(null);
+                              try {
+                                await api(pathOf(m), {
+                                  method: "PATCH",
+                                  body: JSON.stringify({ text: draft.trim() }),
+                                });
+                                await refreshNotes();
+                                setEditing(null);
+                              } catch (e) {
+                                setErr(e instanceof Error ? e.message : "Couldn't save edit");
+                              }
                             }}
                           >
                             Save
@@ -209,9 +219,14 @@ export function PersonChat() {
                         className="cursor-pointer text-band-low underline"
                         onClick={async () => {
                           if (armed !== m.id) return setArmed(m.id);
-                          await api(pathOf(m), { method: "DELETE" });
-                          setArmed(null);
-                          await refreshNotes();
+                          try {
+                            await api(pathOf(m), { method: "DELETE" });
+                            setArmed(null);
+                            await refreshNotes();
+                          } catch (e) {
+                            setErr(e instanceof Error ? e.message : "Couldn't delete");
+                            setArmed(null);
+                          }
                         }}
                       >
                         {armed === m.id ? "Really delete?" : "Delete"}

@@ -58,15 +58,10 @@ function toValue(v) {
 }
 const toFields = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, toValue(v)]));
 
-// 1. Org document
-await api(`${FS}/orgs/${orgId}?updateMask.fieldPaths=name&updateMask.fieldPaths=createdAt`, "PATCH", {
-  fields: toFields({ name: orgName, createdAt: new Date() }),
-});
-console.log(`org ${orgId} ("${orgName}") ready in ${project}`);
-
-// 2. Admin user (find or create), custom claims, membership doc
+// 1. Admin user (find or create) FIRST — we need its uid to stamp org ownership.
 const lookup = await api(`${IDP}/accounts:lookup`, "POST", { email: [adminEmail] });
-let uid = lookup.users?.[0]?.localId;
+const existingUser = lookup.users?.[0];
+let uid = existingUser?.localId;
 if (!uid) {
   const password = adminPasswordArg ?? randomBytes(9).toString("base64url");
   const created = await api(`${IDP}/accounts`, "POST", {
@@ -80,7 +75,37 @@ if (!uid) {
 } else {
   console.log(`admin user ${adminEmail} exists (uid ${uid})`);
   if (adminPasswordArg) console.log("note: user exists — password argument ignored");
+  // Warn loudly before moving an account that already belongs to another org.
+  const priorClaims = existingUser.customAttributes
+    ? JSON.parse(existingUser.customAttributes)
+    : {};
+  if (priorClaims.orgId && priorClaims.orgId !== orgId) {
+    console.warn(
+      `WARNING: ${adminEmail} is currently in org "${priorClaims.orgId}"; ` +
+        `this will MOVE them to "${orgId}" and they'll lose access to the old org.`,
+    );
+  }
 }
+
+// 2. Org document — set name always; set createdAt + createdBy (owner) ONLY on
+//    first creation so re-runs never reset ownership/timestamps. The server's
+//    owner-orphan guard (DELETE /v1/me) keys off createdBy, so it must be set.
+const orgGet = await fetch(`${FS}/orgs/${orgId}`, {
+  headers: { Authorization: `Bearer ${token}`, "x-goog-user-project": project },
+});
+const orgFields = orgGet.ok ? (await orgGet.json()).fields ?? {} : {};
+const write = { name: orgName };
+const mask = ["name"];
+if (!orgFields.createdAt) { write.createdAt = new Date(); mask.push("createdAt"); }
+if (!orgFields.createdBy) { write.createdBy = uid; mask.push("createdBy"); }
+await api(
+  `${FS}/orgs/${orgId}?${mask.map((f) => `updateMask.fieldPaths=${f}`).join("&")}`,
+  "PATCH",
+  { fields: toFields(write) },
+);
+console.log(`org ${orgId} ("${orgName}") ready in ${project} (owner=${orgFields.createdBy?.stringValue ?? uid})`);
+
+// 3. Admin custom claims + membership doc.
 await api(`${IDP}/accounts:update`, "POST", {
   localId: uid,
   customAttributes: JSON.stringify({ orgId, role: "admin" }),

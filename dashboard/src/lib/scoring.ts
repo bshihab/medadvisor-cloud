@@ -35,7 +35,17 @@ export const bandName = (x: number): string =>
 export const pct = (x: number | null | undefined): string =>
   x == null ? "—" : `${Math.round(x * 100)}%`;
 
-export const fmtDay = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : "—");
+// LOCAL calendar date (YYYY-MM-DD). Was iso.slice(0,10) = the UTC date, which
+// disagreed with fmtWhen (local) around UTC midnight — an evening session showed
+// tomorrow's day separator next to today's timestamp.
+export const fmtDay = (iso: string | null | undefined): string => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
 export const fmtWhen = (iso: string | null | undefined): string =>
   iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—";
 

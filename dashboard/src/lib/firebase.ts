@@ -7,7 +7,14 @@ let auth: Auth | null = null;
 
 export async function initAuth(): Promise<Auth> {
   if (auth) return auth;
-  const cfg = await fetch("/v1/client-config").then((r) => r.json());
+  const res = await fetch("/v1/client-config");
+  if (!res.ok) {
+    // A cold-start 429/500 here must surface as a real error the boot flow can
+    // catch and show a retry for — not garbage fed into initializeApp() that
+    // hangs the app on the loading spinner forever.
+    throw new Error(`Couldn't reach the server (${res.status}). Please try again.`);
+  }
+  const cfg = await res.json();
   auth = getAuth(initializeApp(cfg));
   return auth;
 }

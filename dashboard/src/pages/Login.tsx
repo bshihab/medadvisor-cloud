@@ -3,6 +3,7 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   OAuthProvider,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
@@ -27,12 +28,25 @@ export function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
+  const [info, setInfo] = useState("");
   const [busy, setBusy] = useState(false);
 
   const fail = (e: unknown) => {
     const code = (e as { code?: string })?.code ?? "";
     if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return;
     setErr(LOGIN_ERRORS[code] ?? "Sign-in failed. Please try again.");
+  };
+
+  const resetPassword = async () => {
+    setErr("");
+    setInfo("");
+    if (!email) return setErr("Enter your email above first, then tap reset.");
+    try {
+      await sendPasswordResetEmail(getAuthOrThrow(), email);
+      setInfo("If that email has an account, a password-reset link is on its way.");
+    } catch (ex) {
+      fail(ex);
+    }
   };
 
   return (
@@ -86,6 +100,7 @@ export function Login() {
             className="cursor-pointer text-center text-xs text-muted underline"
             onClick={() => {
               setErr("");
+              setInfo("");
               setMode((m) => (m === "signin" ? "signup" : "signin"));
             }}
           >
@@ -93,7 +108,17 @@ export function Login() {
               ? "New here? Create an account"
               : "Already have an account? Sign in"}
           </button>
+          {mode === "signin" && (
+            <button
+              type="button"
+              className="cursor-pointer text-center text-xs text-muted underline"
+              onClick={resetPassword}
+            >
+              Forgot password?
+            </button>
+          )}
         </form>
+        {info && <p className="mt-3 text-sm text-band-high">{info}</p>}
         <div className="my-4 flex items-center gap-3 text-xs text-muted">
           <span className="h-px flex-1 bg-line" />
           or

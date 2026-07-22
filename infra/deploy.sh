@@ -30,6 +30,28 @@ REGION="us-west1"
 SERVICE="medadvisor-api"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Allowlist of emails permitted to edit the GLOBAL rubrics (comma-separated).
+# Pass it in the environment, e.g.  RUBRIC_EDITOR_EMAILS=dir@x.org infra/deploy.sh prod
+# Empty = nobody can write rubrics (secure default; public reads unaffected).
+RUBRIC_EDITOR_EMAILS="${RUBRIC_EDITOR_EMAILS:-}"
+
+# Guardrail: a prod deploy is irreversible-ish and public — require an explicit
+# confirmation and a clean tree so muscle-memory / a dirty checkout can't ship.
+if [ "$ENV" = "prod" ]; then
+  if [ -n "$(git -C "$ROOT" status --porcelain 2>/dev/null)" ]; then
+    echo "!!! working tree is dirty — commit or stash before a prod deploy." >&2
+    git -C "$ROOT" status --short >&2
+    exit 1
+  fi
+  if [ -z "${RUBRIC_EDITOR_EMAILS}" ]; then
+    echo "!!! RUBRIC_EDITOR_EMAILS is empty for a prod deploy." >&2
+    echo "    Rubric editing will be locked for everyone. Set it (or re-run to confirm)." >&2
+  fi
+  printf 'About to deploy to PROD (%s). Type the project id to confirm: ' "$PROJECT" >&2
+  read -r CONFIRM
+  [ "$CONFIRM" = "$PROJECT" ] || { echo "aborted." >&2; exit 1; }
+fi
+
 echo ">>> building dashboard bundle (Vite -> server/public)"
 [ -d "$ROOT/dashboard/node_modules" ] || npm --prefix "$ROOT/dashboard" ci --silent
 npm --prefix "$ROOT/dashboard" run build >/dev/null
@@ -42,7 +64,7 @@ gcloud run deploy "$SERVICE" \
   --allow-unauthenticated \
   --min-instances 0 --max-instances 2 \
   --service-account "medadvisor-api@$PROJECT.iam.gserviceaccount.com" \
-  --set-env-vars "APP_ENV=$ENV,PROJECT_ID=$PROJECT,FIREBASE_API_KEY=$FIREBASE_API_KEY" \
+  --set-env-vars "^@@^APP_ENV=$ENV@@PROJECT_ID=$PROJECT@@FIREBASE_API_KEY=$FIREBASE_API_KEY@@RUBRIC_EDITOR_EMAILS=$RUBRIC_EDITOR_EMAILS" \
   --quiet
 
 URL="$(gcloud run services describe "$SERVICE" \

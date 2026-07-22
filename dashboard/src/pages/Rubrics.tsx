@@ -41,22 +41,15 @@ export function Rubrics() {
 
 /* ---------- editor pieces ---------- */
 
-function Stepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const btn = (label: string, d: number) => (
-    <button
-      onClick={() => onChange(Math.max(0, Math.round((value + d) * 2) / 2))}
-      className="grid h-6 w-6 cursor-pointer place-items-center rounded-[7px] border border-line bg-field text-[13px] font-bold leading-none text-muted hover:border-accent"
-    >
-      {label}
-    </button>
-  );
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      {btn("−", -0.5)}
-      <b className="w-[26px] text-center font-mono text-sm tabular-nums">{value}</b>
-      {btn("+", 0.5)}
-    </span>
-  );
+// Bump the patch component, preserving a "-draft"-style suffix, matching the
+// iOS editor's convention ("0.1.0-draft" → "0.1.1-draft"). The old parseInt
+// bump turned "0.1.0-draft" into "1" and diverged from the app's scheme.
+function bumpVersion(v: string): string {
+  const semver = v.match(/^(\d+)\.(\d+)\.(\d+)(.*)$/);
+  if (semver) return `${semver[1]}.${semver[2]}.${Number(semver[3]) + 1}${semver[4]}`;
+  const trailing = v.match(/^(.*?)(\d+)$/);
+  if (trailing) return `${trailing[1]}${Number(trailing[2]) + 1}`;
+  return `${v}.1`;
 }
 
 function CriterionEditor({
@@ -69,21 +62,34 @@ function CriterionEditor({
   onRemove: () => void;
 }) {
   return (
-    <div className="flex items-start gap-2.5 border-t border-dashed border-rowline py-2.5">
-      <Textarea
-        rows={1}
-        value={crit.prompt}
-        placeholder="What should the trainee do? e.g. “Checked understanding (teach-back)”"
-        onChange={(e) => onChange({ ...crit, prompt: e.target.value })}
-        className="min-h-10 flex-1"
-      />
-      <div className="flex flex-none items-center gap-2.5 pt-[7px]">
-        <span className="text-xs text-muted">weight</span>
-        <Stepper value={crit.weight} onChange={(w) => onChange({ ...crit, weight: w })} />
-        <Button size="sm" variant="ghost" title="Remove criterion" className="text-band-low" onClick={onRemove}>
+    <div className="border-t border-dashed border-rowline py-2.5">
+      <div className="flex items-start gap-2.5">
+        <Textarea
+          rows={1}
+          value={crit.prompt}
+          placeholder="What should the trainee do? e.g. “Checked understanding (teach-back)”"
+          onChange={(e) => onChange({ ...crit, prompt: e.target.value })}
+          className="min-h-10 flex-1"
+        />
+        <Button
+          size="sm"
+          variant="ghost"
+          title="Remove criterion"
+          className="flex-none pt-[7px] text-band-low"
+          onClick={onRemove}
+        >
           ✕
         </Button>
       </div>
+      {/* whatGoodLooksLike is a REAL scoring input fed to the on-device model
+          (Analysis.swift) — the mentor must be able to edit it here. */}
+      <Textarea
+        rows={1}
+        value={crit.whatGoodLooksLike ?? ""}
+        placeholder="What good looks like (guides the AI) — e.g. “States name and role and greets the patient.”"
+        onChange={(e) => onChange({ ...crit, whatGoodLooksLike: e.target.value })}
+        className="mt-1.5 min-h-9 w-full text-[12.5px] text-muted"
+      />
     </div>
   );
 }
@@ -178,7 +184,7 @@ export function RubricEditor() {
 
   // Auto-bump: the user never edits a version field; the server's 409 on an
   // unchanged version stays as a safety net.
-  const nextVersion = String((parseInt(item.version, 10) || 0) + 1);
+  const nextVersion = bumpVersion(item.version);
 
   const save = async () => {
     if (draft.criteria.some((c) => !c.prompt.trim())) {
@@ -192,6 +198,13 @@ export function RubricEditor() {
     try {
       const body = structuredClone(draft) as Rubric;
       body.version = nextVersion;
+      // Drop empty "what good looks like" strings so we don't feed the model a
+      // blank "Good looks like:" line.
+      for (const c of body.criteria) {
+        if (typeof c.whatGoodLooksLike === "string" && !c.whatGoodLooksLike.trim()) {
+          delete c.whatGoodLooksLike;
+        }
+      }
       await api(`/v1/rubrics/${rubricId}`, { method: "PUT", body: JSON.stringify(body) });
       await refreshRubrics();
       setDraft(body);
@@ -261,8 +274,8 @@ export function RubricEditor() {
       <Card>
         <CardTitle>Skill areas &amp; criteria</CardTitle>
         <p className="mb-3.5 text-[12.5px] text-muted">
-          Each skill area groups the specific behaviors the AI looks for. Weight raises or lowers
-          how much a criterion counts.
+          Each skill area groups the specific behaviors the AI looks for. The prompt is the
+          question; “what good looks like” guides how the AI judges it. All criteria count equally.
         </p>
         <div className="flex flex-col gap-2.5">
           {draft.dimensions.map((d, di) => (

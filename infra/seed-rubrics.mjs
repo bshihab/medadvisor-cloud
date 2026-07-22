@@ -14,13 +14,16 @@ import { homedir } from "node:os";
 
 const PROJECTS = { dev: "medadvisor-dev", prod: "medadvisor-production" };
 
-const env = process.argv[2];
+const args = process.argv.slice(2);
+const force = args.includes("--force");
+const positional = args.filter((a) => a !== "--force");
+const env = positional[0];
 const project = PROJECTS[env];
 if (!project) {
-  console.error("usage: seed-rubrics.mjs dev|prod [rubricsDir]");
+  console.error("usage: seed-rubrics.mjs dev|prod [rubricsDir] [--force]");
   process.exit(1);
 }
-const rubricsDir = process.argv[3] ?? join(homedir(), "bilal-dev/medadvisor/rubrics");
+const rubricsDir = positional[1] ?? join(homedir(), "bilal-dev/medadvisor/rubrics");
 
 // JS value → Firestore REST typed value
 function toValue(v) {
@@ -59,6 +62,25 @@ for (const file of files) {
   const url =
     `https://firestore.googleapis.com/v1/projects/${project}` +
     `/databases/(default)/documents/rubrics/${rubric.id}`;
+
+  // Guard: if the stored doc's version differs from the file's, it was edited
+  // in the dashboard since it was seeded — re-seeding would silently revert
+  // that (possibly a version REGRESSION phones might not even re-fetch). Refuse
+  // unless --force. Same version = clean re-seed, allowed.
+  if (!force) {
+    const cur = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (cur.ok) {
+      const storedVersion = (await cur.json())?.fields?.version?.stringValue;
+      if (storedVersion && storedVersion !== rubric.version) {
+        console.error(
+          `SKIP ${file}: stored v${storedVersion} != file v${rubric.version} ` +
+            `— likely a dashboard edit. Re-run with --force to overwrite.`,
+        );
+        continue;
+      }
+    }
+  }
+
   const res = await fetch(url, {
     method: "PATCH",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

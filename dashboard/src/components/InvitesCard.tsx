@@ -24,9 +24,14 @@ function CopyButton({ code }: { code: string }) {
       size="sm"
       variant="outline"
       onClick={async () => {
-        await navigator.clipboard.writeText(code);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        try {
+          await navigator.clipboard.writeText(code);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // Clipboard can be blocked (permissions / not focused) — no-op; the
+          // code is visible next to the button to copy manually.
+        }
       }}
     >
       {copied ? "Copied!" : "Copy"}
@@ -39,6 +44,7 @@ export function InvitesCard() {
   const [role, setRole] = useState<"trainee" | "admin">("trainee");
   const [fresh, setFresh] = useState<Invite | null>(null);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
   return (
     <Card>
@@ -81,6 +87,7 @@ export function InvitesCard() {
             disabled={busy}
             onClick={async () => {
               setBusy(true);
+              setErr("");
               try {
                 const created = await api<Invite>(`/v1/orgs/${me.org!.orgId}/invites`, {
                   method: "POST",
@@ -88,6 +95,8 @@ export function InvitesCard() {
                 });
                 setFresh(created);
                 await refreshInvites();
+              } catch (e) {
+                setErr(e instanceof Error ? e.message : "Couldn't create the code — try again.");
               } finally {
                 setBusy(false);
               }
@@ -96,6 +105,7 @@ export function InvitesCard() {
             Create code
           </Button>
         </div>
+        {err && <p className="mt-2 text-sm text-band-low">{err}</p>}
         <p className="mt-2 text-xs text-muted">
           Mentor codes are single-use on purpose: each one grants full access to every trainee's
           shared data, so mint one per mentor and hand it over directly.

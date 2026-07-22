@@ -10,6 +10,19 @@ import { getMessaging } from "firebase-admin/messaging";
 // MedAdvisor cloud API — MC1 rubrics (public read) + MC2 accounts/orgs.
 // Client-facing contracts live in PLAN.md (MC1/MC2 Interface) — keep in sync.
 const PROJECT_ID = process.env.PROJECT_ID ?? "medadvisor-dev";
+
+// Rubrics are a GLOBAL collection every phone scores against, so writing one is
+// a privileged, cross-org action — being an "admin" of a self-created program
+// must NOT grant it (otherwise any signup → Create program → PUT /v1/rubrics
+// could rewrite the clinical criteria on every device). Gate writes behind an
+// explicit allowlist of editor emails (comma-separated env var, set at deploy).
+// Empty/unset = no one can write (secure default; reads stay public).
+const RUBRIC_EDITORS = new Set(
+  (process.env.RUBRIC_EDITOR_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+);
 const app = express();
 app.disable("x-powered-by");
 // Cloud Run's frontend appends the real client IP as the last X-Forwarded-For
@@ -597,7 +610,7 @@ app.post("/v1/orgs/:orgId/notes", requireAuth, requireOrgAdmin, async (req, res,
     const item = toNoteItem(await ref.get());
     delete item.parentNoteId;
     item.replies = [];
-    await sendPushToUser(b.traineeUid, "New note from your mentor", item.text, {
+    await sendPushToUser(b.traineeUid, "New note from your mentor", {
       noteId: item.noteId, sessionId: item.sessionId ?? "", orgId: req.params.orgId,
     });
     res.json(item);
@@ -664,7 +677,7 @@ app.post("/v1/me/notes", requireAuth, async (req, res, next) => {
       .get();
     await Promise.all(
       mentors.docs.map((d) =>
-        sendPushToUser(d.id, "New message from your trainee", b.text, {
+        sendPushToUser(d.id, "New message from your trainee", {
           noteId: ref.id, sessionId: b.sessionId ?? "", orgId: req.user.orgId,
         }),
       ),
@@ -764,7 +777,7 @@ app.post("/v1/orgs/:orgId/notes/:noteId/replies", requireAuth, async (req, res, 
     // Notify the other party (MC7 sender; best-effort).
     const target = isMentor ? root.traineeUid : root.authorUid;
     const title = isMentor ? "Your mentor replied" : "New reply from your trainee";
-    await sendPushToUser(target, title, b.text, {
+    await sendPushToUser(target, title, {
       noteId: req.params.noteId, replyId: ref.id, orgId: req.params.orgId,
     });
 
@@ -1072,12 +1085,16 @@ app.delete("/v1/me/push-token", requireAuth, async (req, res, next) => {
 // Best-effort: never throws into the request path; unregistered tokens are
 // pruned so the registry self-heals. Awaited before responding because Cloud
 // Run throttles CPU after the response is sent. (MC7; MC8 replies reuse it.)
-async function sendPushToUser(uid, title, text, data) {
+//
+// PRIVACY: the notification body is deliberately GENERIC — note/reply text is
+// (potentially) PHI and APNs/FCM are outside the Google BAA and render on lock
+// screens. The `data` payload carries only ids for deep-linking; the app fetches
+// the actual content over the authed, BAA-covered API. Never put note text here.
+async function sendPushToUser(uid, title, data) {
   try {
     const snap = await db.collection(`users/${uid}/pushTokens`).get();
     if (snap.empty) return;
-    const raw = text ?? "";
-    const body = raw.length > 120 ? `${raw.slice(0, 117)}…` : raw;
+    const body = "Open MedAdvisor to read it.";
     const results = await Promise.allSettled(
       snap.docs.map((d) =>
         getMessaging()
@@ -1133,7 +1150,11 @@ function rubricBodyError(b, id) {
 
 app.put("/v1/rubrics/:id", requireAuth, async (req, res, next) => {
   try {
-    if (req.user.role !== "admin") return res.status(403).json({ error: "forbidden" });
+    // Global rubric writes require an allowlisted editor, NOT merely any admin
+    // role (which self-serve program creation hands out freely). See RUBRIC_EDITORS.
+    if (req.user.role !== "admin" || !RUBRIC_EDITORS.has((req.user.email ?? "").toLowerCase())) {
+      return res.status(403).json({ error: "forbidden" });
+    }
     const ref = db.collection("rubrics").doc(req.params.id);
     const cur = await ref.get();
     if (!cur.exists) return res.status(404).json({ error: "not_found" });
@@ -1168,7 +1189,10 @@ app.get("/admin", (_req, res) => {
 });
 
 app.use((err, _req, res, _next) => {
-  console.error(err);
+  // Log stack/message ONLY — never the whole error object: express.json()
+  // attaches the raw request body to parse-failure errors, which could carry
+  // (redacted-but-sensitive) session/note content into Cloud Logging.
+  console.error(err?.stack || err?.message || "internal error");
   res.status(500).json({ error: "internal" });
 });
 

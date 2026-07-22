@@ -7,16 +7,19 @@ import { Avatar } from "@/components/Avatar";
 import { PageHead } from "@/components/PageHead";
 import { SkillRow } from "@/components/SkillRows";
 import { bandColor, bandName, dimensionScores, fmtDay, overallScore } from "@/lib/scoring";
-import { memberName, sessionsOf, useStore } from "@/store";
+import { hasUnreadFromTrainee, memberName, sessionsOf, useStore } from "@/store";
 
 // The console home: page header, Members card, Cohort-by-skill panel.
 // Invite codes live on their own page (/invites).
 function MemberRow({ uid: memberUid }: { uid: string }) {
-  const { me, members, sessions, orgCreatedBy } = useStore();
+  const { me, members, sessions, notes, orgCreatedBy } = useStore();
   const m = members.find((x) => x.uid === memberUid)!;
   const ss = sessionsOf(sessions, m.uid);
   const series = ss.map(overallScore);
   const latest = [...series].reverse().find((v) => v != null) ?? null;
+  // Unread dot when this trainee has sent a message since the mentor last opened
+  // their chat (mentors don't get their own reply notification otherwise).
+  const unread = m.role !== "admin" && hasUnreadFromTrainee(notes, m.uid);
   return (
     <Link
       to={`/person/${m.uid}`}
@@ -44,6 +47,13 @@ function MemberRow({ uid: memberUid }: { uid: string }) {
       </div>
       {latest != null && <Badge style={{ background: bandColor(latest) }}>{bandName(latest)}</Badge>}
       <Spark values={series} color={latest != null ? bandColor(latest) : "#8888"} />
+      {unread && (
+        <span
+          className="h-2 w-2 flex-none rounded-full bg-accent"
+          title="New message from this trainee"
+          aria-label="New message from this trainee"
+        />
+      )}
       <span className="flex-none text-[17px] text-faint">›</span>
     </Link>
   );
@@ -121,7 +131,7 @@ const SectionHead = ({ label }: { label: string }) => (
 );
 
 export function People() {
-  const { me, members, sessions, rubrics, orgCreatedBy } = useStore();
+  const { me, members, sessions, rubrics, orgCreatedBy, sessionsTruncated } = useStore();
   const navigate = useNavigate();
   // You always first, then the Owner, then the rest as fetched.
   const mentors = [...members.filter((m) => m.role === "admin")].sort(
@@ -141,7 +151,9 @@ export function People() {
   const dims =
     (rubrics.find((r) => r.id === topRubricId) ?? rubrics[0])?.rubric.dimensions ?? [];
   const cohort = dims.map((d) => {
-    const latest = members
+    // TRAINEES only — a mentor who recorded a practice session must not skew the
+    // cohort's "each trainee's latest score" average.
+    const latest = trainees
       .map((m) => {
         const scores = sessionsOf(sessions, m.uid)
           .map((s) => dimensionScores(s)[d.id] ?? null)
@@ -161,6 +173,12 @@ export function People() {
       <PageHead title="People" sub={`${me.org!.name} · ${members.length} members`}>
         <Button onClick={() => navigate("/invites")}>New invite code</Button>
       </PageHead>
+      {sessionsTruncated && (
+        <p className="mb-4 rounded-xl bg-inset px-4 py-2.5 text-[12.5px] text-muted">
+          Showing the most recent 500 sessions. Older sessions exist but aren't loaded here yet —
+          counts and trends reflect the newest 500.
+        </p>
+      )}
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1.42fr_1fr]">
         <Card className="p-0">
           <div className="px-5 pb-3.5 pt-[18px]">
