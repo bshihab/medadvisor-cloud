@@ -46,7 +46,9 @@ export function Login() {
       // A Google/Apple-only account has no password to reset — say so instead of
       // pretending a link was sent. (Returns [] under email-enumeration
       // protection, in which case we fall through to the neutral message.)
-      const methods = await fetchSignInMethodsForEmail(getAuthOrThrow(), email).catch(() => []);
+      const methods = await fetchSignInMethodsForEmail(getAuthOrThrow(), email).catch(
+        (): string[] => [],
+      );
       if (methods.length > 0 && !methods.includes("password")) {
         const provider = methods.includes("google.com")
           ? "Google"
