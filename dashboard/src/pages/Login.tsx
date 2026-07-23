@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
   GoogleAuthProvider,
   OAuthProvider,
   sendPasswordResetEmail,
@@ -42,9 +43,30 @@ export function Login() {
     setInfo("");
     if (!email) return setErr("Enter your email above first, then tap reset.");
     try {
+      // A Google/Apple-only account has no password to reset — say so instead of
+      // pretending a link was sent. (Returns [] under email-enumeration
+      // protection, in which case we fall through to the neutral message.)
+      const methods = await fetchSignInMethodsForEmail(getAuthOrThrow(), email).catch(() => []);
+      if (methods.length > 0 && !methods.includes("password")) {
+        const provider = methods.includes("google.com")
+          ? "Google"
+          : methods.includes("apple.com")
+            ? "Apple"
+            : "another sign-in provider";
+        return setInfo(
+          `This email signs in with ${provider} — use the "Continue with ${provider}" button. There's no password to reset.`,
+        );
+      }
       await sendPasswordResetEmail(getAuthOrThrow(), email);
       setInfo("If that email has an account, a password-reset link is on its way.");
     } catch (ex) {
+      // Never leak which emails exist, and never show login copy ("wrong
+      // password") for a reset action — unknown emails get the same neutral
+      // message a real one does.
+      const code = (ex as { code?: string })?.code ?? "";
+      if (code === "auth/user-not-found" || code === "auth/invalid-credential") {
+        return setInfo("If that email has an account, a password-reset link is on its way.");
+      }
       fail(ex);
     }
   };
