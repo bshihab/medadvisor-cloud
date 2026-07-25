@@ -98,25 +98,29 @@ export function StoreProvider({
     }));
   }, [org]);
 
-  // Keep the dashboard live: a trainee's new share/reply must appear without a
-  // manual reload. Poll notes + core every 30s while visible, and refetch
-  // immediately when the tab regains focus. Errors are swallowed — a transient
-  // failure just means the next tick retries; it never blanks the screen.
+  // Keep the dashboard live: a trainee's new message/share must appear without a
+  // manual reload. Chat is a conversation, so notes poll fast (8s); sessions and
+  // the roster change rarely, so they ride every 4th tick (~32s). Both also
+  // refetch immediately when the tab regains focus. Errors are swallowed — a
+  // transient failure just retries next tick; it never blanks the screen.
   const refreshRef = useRef({ refreshNotes, refreshCore });
   refreshRef.current = { refreshNotes, refreshCore };
   useEffect(() => {
-    const tick = () => {
+    let ticks = 0;
+    const tick = (force = false) => {
       if (document.visibilityState !== "visible") return;
       void refreshRef.current.refreshNotes().catch(() => {});
-      void refreshRef.current.refreshCore().catch(() => {});
+      if (force || ticks % 4 === 0) void refreshRef.current.refreshCore().catch(() => {});
+      ticks += 1;
     };
-    const id = window.setInterval(tick, 30_000);
-    document.addEventListener("visibilitychange", tick);
-    window.addEventListener("focus", tick);
+    const onFocus = () => tick(true);
+    const id = window.setInterval(() => tick(), 8_000);
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onFocus);
     return () => {
       window.clearInterval(id);
-      document.removeEventListener("visibilitychange", tick);
-      window.removeEventListener("focus", tick);
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 

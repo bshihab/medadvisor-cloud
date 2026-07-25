@@ -115,10 +115,13 @@ function DimensionSection({
   return (
     <div className="rounded-xl border border-rowline bg-inset px-3.5 py-1">
       <div className="flex items-center gap-2.5 py-2">
+        {/* Bigger, easier target than the old 13px glyph. */}
         <button
           onClick={() => setOpen((o) => !o)}
           title={open ? "Collapse" : "Expand"}
-          className="w-[18px] cursor-pointer text-[13px] text-muted"
+          aria-label={open ? "Collapse skill area" : "Expand skill area"}
+          aria-expanded={open}
+          className="grid h-7 w-7 flex-none cursor-pointer place-items-center rounded-lg text-base text-muted transition-colors hover:bg-hoverfill hover:text-ink"
         >
           {open ? "▾" : "▸"}
         </button>
@@ -132,7 +135,9 @@ function DimensionSection({
         </span>
       </div>
       {open && (
-        <div className="pb-2.5">
+        /* Indent + rule so the criteria read as belonging to THIS skill area —
+           previously they sat flush left of the label and looked unparented. */
+        <div className="ml-[14px] border-l border-rowline pb-2.5 pl-4">
           {criteria.map((c) => (
             <CriterionEditor
               key={c.id}

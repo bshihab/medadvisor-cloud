@@ -5,7 +5,7 @@ import { ClipboardList, KeyRound, LogOut, Menu, Monitor, Moon, Sun, Users } from
 import { getAuthOrThrow, initAuth } from "./lib/firebase";
 import { api } from "./lib/api";
 import type { Me } from "./lib/types";
-import { loadAll, StoreProvider, useStore } from "./store";
+import { hasUnreadFromTrainee, loadAll, StoreProvider, useStore } from "./store";
 import { Login } from "./pages/Login";
 import { OrgGate } from "./pages/OrgGate";
 import { People } from "./pages/People";
@@ -66,6 +66,7 @@ function SideNavItem({
   icon: Icon,
   label,
   count,
+  dot,
   collapsed,
 }: {
   to: string;
@@ -73,6 +74,7 @@ function SideNavItem({
   icon: typeof Users;
   label: string;
   count?: number;
+  dot?: boolean;
   collapsed: boolean;
 }) {
   return (
@@ -92,7 +94,16 @@ function SideNavItem({
     >
       {({ isActive }) => (
         <>
-          <Icon size={18} className="flex-none" />
+          <span className="relative flex-none">
+            <Icon size={18} />
+            {/* Unread from a trainee — visible from every page, not just People. */}
+            {dot && (
+              <span
+                className="absolute -right-1 -top-0.5 h-2 w-2 rounded-full bg-accent ring-2 ring-[var(--side-bg,transparent)]"
+                aria-label="New messages"
+              />
+            )}
+          </span>
           {!collapsed && <span className="min-w-0 flex-1 truncate">{label}</span>}
           {!collapsed && count != null && (
             <span
@@ -111,7 +122,10 @@ function SideNavItem({
 }
 
 function Shell() {
-  const { me, members } = useStore();
+  const { me, members, notes } = useStore();
+  const anyUnread = members.some(
+    (m) => m.role !== "admin" && hasUnreadFromTrainee(notes, m.uid),
+  );
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const [collapsed, setCollapsed] = useState(
@@ -162,7 +176,7 @@ function Shell() {
           </button>
         </div>
         <nav className="flex flex-1 flex-col gap-[3px] overflow-y-auto">
-          <SideNavItem to="/" end icon={Users} label="People" count={members.length} collapsed={collapsed} />
+          <SideNavItem to="/" end icon={Users} label="People" count={members.length} dot={anyUnread} collapsed={collapsed} />
           <SideNavItem to="/rubrics" icon={ClipboardList} label="Rubrics" collapsed={collapsed} />
           <SideNavItem to="/invites" icon={KeyRound} label="Invite codes" collapsed={collapsed} />
         </nav>
