@@ -48,11 +48,17 @@ chats by pointing at the file.
   cohort via the web dashboard.
 - **Privacy is the product.** The AI never moves to the cloud. What syncs is
   **Tier 2: per-criterion scores + short REDACTED evidence quotes**, and only
-  after (a) a second rule-based NER redaction pass on top of the on-device
-  LLM redaction (they fail differently), and (b) the trainee **reviews the
-  exact content and explicitly confirms "share with mentor"** before upload.
-  Full transcripts never sync by default (a per-session opt-in escalation may
-  come much later).
+  after (a) rule-based NER redaction (`PHIRedactor`: Apple NLTagger + regex),
+  and (b) the trainee **reviews the exact content and explicitly confirms
+  "share with mentor"** before upload. Full transcripts never sync by default
+  (a per-session opt-in escalation may come much later).
+  - **Accuracy note (don't repeat the old claim):** redaction runs twice — once
+    before scoring, once on the quotes/summary at the share gate — but both calls
+    are the SAME rule-based function, so they fail identically. There is no
+    independent LLM redaction pass; earlier docs describing "two passes that fail
+    differently" were wrong. The human review gate is the real second net, which
+    is why the **private backup** path (automated, no gate) is the weaker one.
+    Redaction recall has not been measured yet (iOS PLAN.md M4).
 - **Real patients are the eventual target** (not just role-play) and the plan
   is to scale to multiple institutions → HIPAA matters: sign Google's BAA, use
   **Identity Platform** (NOT classic Firebase Auth — it's the same service but

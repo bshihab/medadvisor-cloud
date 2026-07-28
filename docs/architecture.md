@@ -19,7 +19,7 @@ flowchart TB
     subgraph Phone["📱 iOS app (on-device — offline-capable)"]
         Rec["Record + live transcript<br/>(Apple SpeechAnalyzer)"]
         LLM["Qwen 7B via llama.cpp<br/>attribution · redaction · scoring"]
-        FS["FeedbackStore<br/>Documents/feedback/*.json<br/>(encrypted at rest, ownerUid-scoped)"]
+        FS["FeedbackStore<br/>Documents/feedback/*.json<br/>(iOS Data Protection, no iCloud backup,<br/>ownerUid-scoped)"]
         Gate["Share-with-mentor gate<br/>2nd redaction pass + user review"]
         Rec --> LLM --> FS
         FS --> Gate
@@ -80,21 +80,30 @@ sequenceDiagram
 
 | Data | On device | In cloud (Firestore) |
 |---|---|---|
-| Audio | deleted after analysis | never |
-| Transcript / turns | yes (encrypted, never leaves) | **never** |
-| Scores + redacted quotes | yes | only if shared (`orgs/{org}/sessions`) |
+| Audio | deleted after analysis; strays swept at launch | never |
+| Transcript / turns | yes (Data Protection, never leaves) | **never** |
+| Scores + redacted quotes | yes | private backup (`users/{uid}/backupSessions`) + shared copy if shared (`orgs/{org}/sessions`) |
 | Chat (notes + replies) | pulled from cloud, not persisted | yes (`orgs/{org}/notes`) |
-| Rubrics | bundled + cached copy | source of truth (`rubrics`) |
+| Rubrics | bundled + cached copy | source of truth (`rubrics`, plus immutable `rubrics/{id}/versions/{version}`) |
 | Accounts / org membership | token only | Identity Platform + `orgs/{org}/members` |
 
-- **Local is primary** for a trainee's own history; cloud holds only shared
-  sessions (and without the transcript).
-- Records are **owner-scoped** on device (`ownerUid`): after sign-out they stay
-  on disk but are filtered from view; they reappear when that user signs back
-  in. Another user only ever sees their own + anonymous records.
-- **Restore** (lost/new phone): a trainee signing in pulls their shared sessions
-  back via `GET /v1/me/sessions`. Unshared sessions are device-only and are not
-  recoverable — see "open questions" in PLAN.md re: a private backup tier.
+- **At rest on device:** iOS Data Protection (files unreadable while locked,
+  tied to the passcode) and **excluded from iCloud backup**, so nothing rides a
+  device backup off the phone. Not SQLCipher — no custom crypto ships.
+- **Local is primary** for a trainee's own history; the cloud holds the Tier-2
+  scorecard only (never the transcript).
+- Records are **owner-scoped** on device (`ownerUid`). Signed in, a user sees
+  **only their own** records; signed out, only unowned ones. Sessions recorded
+  while signed out are claimed automatically on sign-in when that account is the
+  only one the device has ever seen, and the user is asked when a different
+  account has used the device.
+- **Restore** (lost/new phone): signing in pulls back both the private backup
+  (`GET /v1/me/backup/sessions`, MC9 — shipped) and any shared sessions
+  (`GET /v1/me/sessions`). Sessions recorded with backup disabled remain
+  device-only and are not recoverable.
+- **Retraction:** a trainee can see and remove whatever the mentor currently
+  holds via `GET /v1/me/sessions` → `DELETE /v1/sessions/:id` (in-app: Account →
+  "Shared with your mentor"), independently of their local copy.
 
 ## Firestore collections
 
