@@ -825,7 +825,7 @@ Insights, native mentor Cohort tab — both shipped — and the web dashboard):
   org-scoped rules. Org #1 = director's program.
 - 2026-07-08 **Login optional** in-app; required only for sync/mentor sharing.
 - 2026-07-08 Bilal personally owns the GCP account. Budget alerts mandatory.
-- 2026-07-08 Stack per Bilal's dad: Cloud Run (Docker, min 0/low max),
+- 2026-07-08 Stack per the cloud-infrastructure advisor: Cloud Run (Docker, min 0/low max),
   Firestore, Secret Manager, dev/staging/prod, rate limits, small browser
   bundle, deploy prebuilt bundles.
 - 2026-07-08 **Prod project ID is `medadvisor-production`** — `medadvisor-prod`

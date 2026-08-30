@@ -77,7 +77,7 @@ chats by pointing at the file.
   URL pub-911d7a5254944de984f1c95e6b8ddcdd.r2.dev) with HF fallback.
   Pre-launch TODO parked in PLAN.md: custom domain on that bucket.
 
-## Stack decisions (from Bilal's dad, a cloud expert — treat as settled)
+## Stack decisions (from a cloud-infrastructure advisor — treat as settled)
 
 - **GCP Cloud Run** for the server: Docker container, `min-instances=0`,
   low `max-instances` (bill protection). Separate **dev and prod projects**;
