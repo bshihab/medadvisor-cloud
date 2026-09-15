@@ -7,12 +7,17 @@ leave the device; HIPAA posture). This repo adds the cloud layer around that
 app: accounts, cloud-hosted rubrics, opt-in sharing of redacted results, and a
 web dashboard for the supervising physician.
 
-## The two repos and the two chats
+## The two repos and their chats
 
 | Repo | What it is | Claude chat that owns it |
 |---|---|---|
-| `~/bilal-dev/medadvisor` | The iOS app (SwiftUI, llama.cpp + Qwen2.5-7B on-device) | The long-running "iOS" chat |
+| `~/bilal-dev/medadvisor` | The iOS app (SwiftUI, llama.cpp). Judge models: Qwen2.5-7B default, Qwen3.5-4B opt-in, plus a scoped second-pass verifier (ships since 2026-09-03). Current numbers: `medadvisor/tools/llm-benchmark/calibration/FINDINGS.md` | Any chat launched from `~/bilal-dev/medadvisor` |
 | `~/bilal-dev/medadvisor-cloud` (this) | Server (Cloud Run), mentor dashboard, infra | **This chat** |
+
+Cross-repo facts (current models, machines, closed paths, open items, how
+chats hand context to each other) live in **`~/bilal-dev/CLAUDE.md`**, which
+loads automatically in every chat launched under `~/bilal-dev`. When this file
+and that one disagree, that one is newer.
 
 **Coordination rule: `PLAN.md` in this repo is the single source of truth** for
 milestones, decisions, and status. Update it when milestones move. Interface
@@ -72,8 +77,8 @@ chats by pointing at the file.
 - **Cloud rubrics:** the director updates guidelines from the dashboard;
   phones fetch + cache them (bundled copy as offline fallback). Rubric JSONs
   currently live in the iOS repo at `medadvisor/rubrics/`.
-- **Model delivery is already solved, not this repo's problem:** the 4.4 GB
-  GGUF downloads from Cloudflare R2 (bucket `medadvisor-models`, public dev
+- **Model delivery is already solved, not this repo's problem:** the GGUF
+  judge models (7B ~4.3 GB, 4B ~3.0 GB) download from Cloudflare R2 (bucket `medadvisor-models`, public dev
   URL pub-911d7a5254944de984f1c95e6b8ddcdd.r2.dev) with HF fallback.
   Pre-launch TODO parked in PLAN.md: custom domain on that bucket.
 
